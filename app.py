@@ -156,7 +156,8 @@ with col2:
 
         fig_combo = go.Figure()
 
-        # 1. แท่งกราฟ (Bar Chart) แสดงคะแนนดิบรวมรายวัน -> อ้างอิงแกน Y ซ้าย (y)
+        # 1. แท่งกราฟ (Bar Chart) -> ปรับข้อความไปอยู่เหนือแท่งกราฟด้านนอก (outside) เพื่อเลี่ยงการซ้อนกัน
+        max_y_value = df_trend["sum_score"].max() if not df_trend.empty else 100
         fig_combo.add_trace(
             go.Bar(
                 x=df_trend["วันที่_str"],
@@ -164,13 +165,13 @@ with col2:
                 name="คะแนนรวม (Sum)",
                 marker_color="#1a6582",  # สีน้ำเงินเข้ม
                 text=df_trend["sum_score"],
-                textposition="inside",
-                textfont=dict(color="white", weight="bold"),
+                textposition="outside",  # ขยับไปอยู่นอกแท่งกราฟด้านบน
+                textfont=dict(color="#334155", weight="bold"),
                 yaxis="y"
             )
         )
 
-        # 2. กราฟเส้น (Line Chart) แสดงเปอร์เซ็นต์ผลงาน -> อ้างอิงแกน Y ขวา (y2)
+        # 2. กราฟเส้น (Line Chart) -> จัดข้อความให้อยู่เยื้องไปด้านบนและปรับสีให้อ่านง่ายขึ้น
         fig_combo.add_trace(
             go.Scatter(
                 x=df_trend["วันที่_str"],
@@ -180,8 +181,8 @@ with col2:
                 line=dict(color="#e66f21", width=3),  # สีส้ม
                 marker=dict(size=8),
                 text=df_trend["pct_score"].round(0).astype(int).astype(str) + "%",
-                textposition="top center",
-                textfont=dict(weight="bold"),
+                textposition="top center",  # ดันขึ้นไปเหนือจุด marker
+                textfont=dict(weight="bold", color="#b45309"),
                 yaxis="y2"
             )
         )
@@ -192,19 +193,20 @@ with col2:
             hovermode="x unified",
             showlegend=False,
             
-            # แกน Y หลัก (ซ้าย)
+            # แกน Y หลัก (ซ้าย) -> เผื่อพื้นที่ด้านบนแท่งกราฟ 15% เพื่อรองรับตัวเลขไม่ให้ชนขอบ
             yaxis=dict(
                 title="Sum of Table5.คะแนน",
                 side="left",
-                showgrid=True
+                showgrid=True,
+                range=[0, max_y_value * 1.15]
             ),
             
-            # แกน Y ที่สอง (ขวา)
+            # แกน Y ที่สอง (ขวา) -> เผื่อระยะเผื่อตัวเลขเช่นกัน
             yaxis2=dict(
                 title="% คะแนน",
                 side="right",
                 overlaying="y",
-                range=[0, 105],
+                range=[0, 115],
                 ticksuffix="%",
                 showgrid=False
             ),
