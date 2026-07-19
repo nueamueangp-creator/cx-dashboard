@@ -131,14 +131,17 @@ with col3:
     st.plotly_chart(fig_stack, use_container_width=True)
 
 with col4:
-    # 🛠️ ปรับแก้ตรงนี้: ลบคำว่า upper/lower fence ออกถาวร และเปลี่ยนให้แสดงผลเฉพาะค่าจำเป็น 3 ค่า
+    # 🛠️ จัดการจุดนี้เด็ดขาด: สั่งปิดการคำนวณอัตโนมัติของตัวเก่าทั้งหมด
     fig_box = px.box(
         df_filtered, x="ชื่อ", y="Table5.คะแนน", 
         title="วิเคราะห์ความเสถียรของคุณภาพบริการ (ความกว้างกล่อง = คะแนนแกว่ง)", color="ชื่อ"
     )
-    # สั่งล้างรูปแบบเดิมออก แล้วบังคับแสดงผลเฉพาะ ชื่อพนักงาน, คะแนนสูงสุด, คะแนนกลาง, คะแนนต่ำสุด
+    # บังคับใช้เทมเพลตคำอธิบายเฉพาะตัว และสั่งปิดโหมดกล่องของแถม (hovermode=False)
     fig_box.update_traces(
         hovertemplate="<b>%{x}</b><br>คะแนนสูงสุด (Max): %{y}<br>คะแนนตรงกลาง (Median): %{median}<br>คะแนนต่ำสุด (Min): %{min}<extra></extra>"
+    )
+    fig_box.update_layout(
+        hovermode="closest"  # บังคับแสดงทีละกล่องตามเมาส์ชี้ ไม่ต้องดึงสถิติรวมของแกน X โผล่มา
     )
     st.plotly_chart(fig_box, use_container_width=True)
 
