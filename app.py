@@ -15,52 +15,50 @@ try:
         df["วันที่ประเมิน"] = pd.to_datetime(df["วันที่ประเมิน"])
         df = df.sort_values(by="วันที่ประเมิน")
     
-    # คำนวณค่าคงที่สำหรับโพยพรีเซ็นต์ (คำนวณจากข้อมูลดิบก่อนฟิลเตอร์)
-    agent_means_all = df.groupby("ชื่อ")["Table5.คะแนน"].mean()
-    lowest_agent = agent_means_all.idxmin()
-    lowest_score = agent_means_all.min()
-    highest_agent = agent_means_all.idxmax()
-    highest_score = agent_means_all.max()
-    TARGET_SCORE = 20
-    failed_percentage_all = (len(df[df["Table5.คะแนน"] < TARGET_SCORE]) / len(df)) * 100
+    # 🎯 ตั้งค่าเกณฑ์คะแนน (คะแนนเต็ม 25 | เป้าหมาย 90% = 22.5 คะแนน)
+    FULL_SCORE = 25
+    TARGET_PERCENTAGE = 90
+    TARGET_SCORE = FULL_SCORE * (TARGET_PERCENTAGE / 100) # 22.5 คะแนน
 
 except Exception as e:
     st.error("❌ เกิดข้อผิดพลาดในการโหลดข้อมูล")
     st.stop()
 
 # =========================================================================
-# 🎛️ ส่วนที่ 2: ระบบตัวกรองข้อมูล (SIDEBAR FILTERS)
+# 🎛️ ส่วนที่ 2: ระบบตัวกรองข้อมูลแบบคลีน (CLEAN SIDEBAR FILTERS)
 # =========================================================================
 st.sidebar.header("🔍 ตัวกรองแดชบอร์ด")
 st.sidebar.markdown("---")
 
-# ฟิลเตอร์รายชื่อพนักงาน
+# 👤 ตัวกรองรายชื่อพนักงาน (รองรับกรณีคนเยอะ แถบจะไม่รก)
+agent_filter_type = st.sidebar.radio("รูปแบบการเลือกพนักงาน:", ["แสดงพนักงานทุกคน (All)", "เลือกเฉพาะบางคน"])
 all_agents = sorted(df["ชื่อ"].dropna().unique())
-selected_agents = st.sidebar.multiselect("👤 เลือกพนักงาน:", all_agents, default=all_agents)
 
-# ฟิลเตอร์เกรดผลงาน
+if agent_filter_type == "เลือกเฉพาะบางคน":
+    selected_agents = st.sidebar.multiselect("เลือกชื่อพนักงาน:", all_agents, default=all_agents[:2])
+    df_filtered = df[df["ชื่อ"].isin(selected_agents)]
+else:
+    df_filtered = df.copy()
+
+# 🏅 ตัวกรองเกรดผลงาน (เปลี่ยนเป็นแบบกดเลือกทีละกลุ่มเพื่อความง่าย)
 all_grades = sorted(df["Performance by personal"].dropna().unique())
-selected_grades = st.sidebar.multiselect("🏅 เลือกเกรดประเมิน:", all_grades, default=all_grades)
+selected_grade = st.sidebar.selectbox("🏅 เลือกเกรดประเมิน:", ["ทั้งหมด (All)"] + all_grades)
 
-# ตัวกรองช่วงคะแนน
+if selected_grade != "ทั้งหมด (All)":
+    df_filtered = df_filtered[df_filtered["Performance by personal"] == selected_grade]
+
+# 📊 ตัวกรองช่วงคะแนน
 min_score, max_score = int(df["Table5.คะแนน"].min()), int(df["Table5.คะแนน"].max())
 score_range = st.sidebar.slider("📊 ช่วงคะแนนที่ต้องการดู:", min_score, max_score, (min_score, max_score))
-
-# บังคับใช้ฟิลเตอร์ลงในข้อมูล
-df_filtered = df[
-    (df["ชื่อ"].isin(selected_agents)) & 
-    (df["Performance by personal"].isin(selected_grades)) &
-    (df["Table5.คะแนน"] >= score_range[0]) &
-    (df["Table5.คะแนน"] <= score_range[1])
-]
+df_filtered = df_filtered[(df_filtered["Table5.คะแนน"] >= score_range[0]) & (df_filtered["Table5.คะแนน"] <= score_range[1])]
 
 # คำนวณค่าสถิติตามตัวกรอง
 total_records = len(df_filtered)
 if total_records > 0:
     avg_score = df_filtered["Table5.คะแนน"].mean()
-    avg_percentage = (avg_score / 25) * 100
-    failed_cases = len(df_filtered[df_filtered["Table5.คะแนน"] < TARGET_SCORE])
-    need_improve_count = len(df_filtered[df_filtered["Performance by personal"] == "Need Improve"])
+    avg_percentage = (avg_score / FULL_SCORE) * 100
+    above_target_cases = len(df_filtered[df_filtered["Table5.คะแนน"] >= TARGET_SCORE])
+    above_target_pct = (above_target_cases / total_records) * 100
 else:
     st.warning("⚠️ ไม่พบข้อมูลที่ตรงกับตัวกรองของคุณ กรุณาปรับตัวกรองใหม่ที่แถบด้านข้าง")
     st.stop()
@@ -68,64 +66,54 @@ else:
 # =========================================================================
 # 🎨 ส่วนที่ 3: หน้าตาแดชบอร์ด (UI)
 # =========================================================================
-st.markdown(
-    f"""
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;600;700&family=Sarabun:wght@400;500;700&display=swap" rel="stylesheet">
-    <style> * {{ font-family: 'Sarabun', sans-serif; }} h1, h2, h3, h4 {{ font-family: 'Prompt', sans-serif; }} </style>
-    
-    <header class="bg-slate-900 text-white rounded-2xl p-5 mb-6 flex items-center justify-between border border-slate-800 shadow-lg">
+# เขียนสไตล์แบบ Inline ป้องกันปัญหาบั๊กปีกกาซ้อน
+header_html = f"""
+<script src="https://cdn.tailwindcss.com"></script>
+<div style="background-color: #0f172a; color: white; border-radius: 1rem; padding: 1.25rem; margin-bottom: 1.5rem; border: 1px solid #1e293b; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
         <div>
-            <h1 class="text-xl font-bold text-white">1577 CX Performance Control & Quality Radar</h1>
-            <p class="text-xs text-slate-400 mt-0.5">แดชบอร์ดวิเคราะห์และควบคุมคุณภาพงานบริการลูกค้า (Interactive Version)</p>
+            <h1 style="font-size: 1.25rem; font-weight: bold; color: white; margin: 0; font-family: sans-serif;">1577 CX Performance Control & Quality Radar</h1>
+            <p style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.125rem; margin-bottom: 0;">ระบบวิเคราะห์และควบคุมคุณภาพงานบริการลูกค้าตามเป้าหมาย 90%</p>
         </div>
-        <div class="text-xs bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700 text-slate-300">
-            📊 แสดงข้อมูลตามตัวกรอง: <b>{total_records} เคส</b>
+        <div style="font-size: 0.75rem; background-color: #1e293b; padding: 0.375rem 0.75rem; border-radius: 0.75rem; border: 1px solid #334155; color: #cbd5e1;">
+            📊 ข้อมูลตามตัวกรอง: <b>{total_records} เคส</b>
         </div>
-    </header>
-    """,
-    unsafe_allow_html=True
-)
+    </div>
+</div>
+"""
+st.markdown(header_html, unsafe_allow_html=True)
 
-# 🤫 1) โพยย่อสำหรับพรีเซ็นต์ (ซ่อนไว้ คลิกเปิดได้ตอนจะพูด)
-with st.expander("💡 [คลิกเพื่อเปิด] โพยย่อข้อมูลเชิงลึกสำหรับใช้พูดพรีเซ็นต์ (Presenter Cheatsheet)"):
-    st.markdown(f"""
-    * **จุดวิกฤตสูงสุดของแผนก:** ภาพรวมทั้งระบบมีเคสตกเกณฑ์มาตรฐาน (ต่ำกว่า 20 คะแนน) สูงถึง **{failed_percentage_all:.1f}%**
-    * **การจัดการรายบุคคล:** คุณ **{lowest_agent}** คะแนนเฉลี่ยต่ำสุด (**{lowest_score:.2f}**) ต้องเข้า Coaching / คุณ **{highest_agent}** สูงสุด (**{highest_score:.2f}**) เหมาะเป็นหัวหน้าทีมคู่หู
-    * *โน้ตเพิ่มเติม:* คุณสามารถกดติ๊กเลือกชื่อ หรือเกรดที่แถบเมนูด้านซ้ายมือ เพื่อเจาะลึกข้อมูลสดบนหน้าจอโชว์เจ้านายได้ทันทีระหว่างพรีเซ็นต์
-    """)
-
-# 📊 สรุปตัวเลขสำคัญ (KPI Cards)
-st.markdown("### 📌 ตัวชี้วัดสำคัญ (Key Metrics)")
+# 📊 สรุปตัวเลขสำคัญเปรียบเทียบกับเป้าหมาย 90% (KPI Cards)
+st.markdown("### 📌 ตัวชี้วัดประสิทธิภาพเทียบกับเป้าหมาย 90%")
 kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 with kpi1:
-    st.metric("จำนวนเคสที่ตรวจสอบ", f"{total_records} รายการ")
+    st.metric("คะแนนเต็มต่อเคส", f"{FULL_SCORE} คะแนน")
 with kpi2:
-    st.metric("คะแนนเฉลี่ย (ตัวกรองปัจจุบัน)", f"{avg_score:.2f} / 25")
+    st.metric("คะแนนเฉลี่ยปัจจุบันที่ทำได้", f"{avg_score:.2f} / {FULL_SCORE}", delta=f"คิดเป็น {avg_percentage:.1f}% ของเต็ม")
 with kpi3:
-    st.metric("เปอร์เซ็นต์ประสิทธิภาพ", f"{avg_percentage:.1f}%")
+    st.metric(f"คะแนนเป้าหมาย ({TARGET_PERCENTAGE}%)", f"{TARGET_SCORE:.2f} คะแนน", delta=f"ขาดอีก {(TARGET_SCORE - avg_score):.2f}" if avg_score < TARGET_SCORE else "บรรลุเป้าหมายแล้ว ✨")
 with kpi4:
-    st.metric("เคสวิกฤต Need Improve", f"{need_improve_count} เคส", delta=f"ตกเกณฑ์ {failed_cases} เคส", delta_color="inverse")
+    st.metric("สัดส่วนเคสที่ผ่านเกณฑ์ 90%", f"{above_target_cases} เคส", delta=f"{above_target_pct:.1f}% ของเคสทั้งหมด")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 📈 โซนกราฟแถวที่ 1: การจัดอันดับและแนวโน้ม
+# 📈 โซนกราฟแถวที่ 1: การจัดอันดับและแนวโน้ม (เส้นประจะเปลี่ยนเป็นเกณฑ์ 90% หรือ 22.5 คะแนน)
 st.markdown("### 📈 อันดับผลงานและแนวโน้มคุณภาพ")
 col1, col2 = st.columns(2)
 
 with col1:
     df_agent = df_filtered.groupby("ชื่อ")["Table5.คะแนน"].mean().reset_index().sort_values(by="Table5.คะแนน")
     fig_bar = px.bar(df_agent, x="Table5.คะแนน", y="ชื่อ", orientation='h',
-                     title="คะแนนเฉลี่ยรายบุคคล (เปรียบเทียบกับเกณฑ์เป้าหมาย)",
+                     title=f"คะแนนเฉลี่ยรายบุคคล (เปรียบเทียบกับเป้าหมาย {TARGET_PERCENTAGE}%)",
                      color="Table5.คะแนน", color_continuous_scale="RdYlGn")
-    fig_bar.add_vline(x=TARGET_SCORE, line_dash="dash", line_color="red", annotation_text="เกณฑ์ผ่าน (20)")
+    fig_bar.add_vline(x=TARGET_SCORE, line_dash="dash", line_color="blue", annotation_text=f"เป้าหมาย 90% ({TARGET_SCORE})", annotation_position="top right")
     st.plotly_chart(fig_bar, use_container_width=True)
 
 with col2:
     if "วันที่ประเมิน" in df_filtered.columns:
         df_trend = df_filtered.groupby("วันที่ประเมิน")["Table5.คะแนน"].mean().reset_index()
         fig_line = px.line(df_trend, x="วันที่ประเมิน", y="Table5.คะแนน", title="แนวโน้มคุณภาพบริการรายวัน (Timeline Trend)", markers=True)
-        fig_line.add_hline(y=TARGET_SCORE, line_dash="dash", line_color="red")
+        fig_line.add_hline(y=TARGET_SCORE, line_dash="dash", line_color="blue")
         st.plotly_chart(fig_line, use_container_width=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
@@ -152,19 +140,15 @@ with col4:
     st.plotly_chart(fig_box, use_container_width=True)
 
 # =========================================================================
-# 🧮 ส่วนที่ 4: ตาราง PIVOT TABLE แบบเดียวกับ Excel (ตามภาพบรีฟชุดใหม่)
+# 🧮 ส่วนที่ 4: ตาราง PIVOT TABLE แบบเดียวกับ Excel 
 # =========================================================================
 st.markdown("---")
 st.markdown("### 🗂️ ตารางสรุปข้อมูลประเมินผลไขว้รายวัน (Pivot Table แบบ Excel)")
 
 if "วันที่ประเมิน" in df_filtered.columns and not df_filtered.empty:
-    # คัดลอกข้อมูลมาทำตารางแยกเพื่อไม่ให้กระทบกราฟ
     df_pivot_prep = df_filtered.copy()
-    
-    # จัดฟอร์แมตวันที่ให้สวยงามแบบใน Excel (วัน/เดือน/ปี ค.ศ.)
     df_pivot_prep["วันที่ประเมิน"] = df_pivot_prep["วันที่ประเมิน"].dt.strftime('%d/%m/%Y')
     
-    # สั่งสร้าง Pivot Table: แถว = ชื่อ, คอลัมน์ = วันที่ประเมิน, ค่า = ผลรวมของคะแนน
     pivot_table = df_pivot_prep.pivot_table(
         index="ชื่อ",
         columns="วันที่ประเมิน",
@@ -173,13 +157,9 @@ if "วันที่ประเมิน" in df_filtered.columns and not df_f
         fill_value=0
     )
     
-    # ➕ คำนวณหา Grand Total แนวนอน (รวมขวา)
     pivot_table["Grand Total"] = pivot_table.sum(axis=1)
-    
-    # ➕ คำนวณหา Grand Total แนวตั้ง (รวมล่าง)
     pivot_table.loc["Grand Total"] = pivot_table.sum(axis=0)
     
-    # แสดงตาราง Pivot Table ออกมาบนหน้าจอแบบสวยงาม
     st.dataframe(pivot_table, use_container_width=True)
 else:
     st.info("💡 ไม่มีข้อมูลแสดงผลในตารางเนื่องจากตัวกรอง")
