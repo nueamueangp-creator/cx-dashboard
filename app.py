@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 # 1. ตั้งค่าหน้าแดชบอร์ด
 st.set_page_config(page_title="1577 CX Performance Control", layout="wide", initial_sidebar_state="expanded")
@@ -145,91 +143,10 @@ with col1:
 
 with col2:
     if "วันที่ประเมิน" in df_filtered.columns:
-        # 1. จัดกลุ่มข้อมูลเพื่อดึงยอดรวมสะสมคะแนน และจำนวนเคสที่ประเมินแยกเป็นรายวัน
-        df_trend = df_filtered.groupby("วันที่ประเมิน").agg(
-            Sum_Score=("Table5.คะแนน", "sum"),
-            Count_Cases=("Table5.คะแนน", "count")
-        ).reset_index()
-        
-        # 2. คำนวณเปอร์เซ็นต์ผลสัมฤทธิ์สะสมของแต่ละวัน และจัดแต่งข้อความของแกนและเลเบล
-        df_trend["Max_Possible"] = df_trend["Count_Cases"] * FULL_SCORE
-        df_trend["Pct_Score"] = (df_trend["Sum_Score"] / df_trend["Max_Possible"]) * 100
-        df_trend["Pct_Text"] = df_trend["Pct_Score"].apply(lambda x: f"{round(x)}%")
-        df_trend["วันที่_แสดงผล"] = df_trend["วันที่ประเมิน"].dt.strftime('%d/%m/%Y')
-        
-        # 3. สร้างกราฟที่มี 2 แกน Y ร่วมกัน (Dual-Axis)
-        fig_trend = make_subplots(specs=[[{"secondary_y": True}]])
-        
-        # 4. เพิ่มแผนภูมิแท่ง (Bar Chart) คะแนนสะสมจริง (Qty) ที่แกนหลักฝั่งซ้าย
-        fig_trend.add_trace(
-            go.Bar(
-                x=df_trend["วันที่_แสดงผล"],
-                y=df_trend["Sum_Score"],
-                name="คะแนนดิบสะสมรวม (Qty)",
-                marker=dict(color="#1a5f7a"),
-                text=df_trend["Sum_Score"],
-                textposition="inside",
-                insidetextanchor="bottom",
-                textfont=dict(color="white", size=14, family="sans-serif", weight="bold"),
-                hovertemplate="วันที่: %{x}<br>คะแนนรวม: %{y} คะแนน<extra></extra>"
-            ),
-            secondary_y=False
-        )
-        
-        # 5. เพิ่มแผนภูมิเส้น (Line Chart) อัตราความสำเร็จ (%) ที่แกนรองฝั่งขวา
-        fig_trend.add_trace(
-            go.Scatter(
-                x=df_trend["วันที่_แสดงผล"],
-                y=df_trend["Pct_Score"],
-                name="เปอร์เซ็นต์อัตราความสำเร็จ (%)",
-                mode="lines+markers+text",
-                line=dict(color="#ea580c", width=4),
-                marker=dict(size=12, symbol="circle", color="#ea580c"),
-                text=df_trend["Pct_Text"],
-                textposition="top center",
-                textfont=dict(color="#1e293b", size=13, family="sans-serif", weight="bold"),
-                hovertemplate="วันที่: %{x}<br>เปอร์เซ็นต์: %{text}<extra></extra>"
-            ),
-            secondary_y=True
-        )
-        
-        # 6. ตั้งค่าการจัดแต่งรูปแบบกราฟให้เหมือนกับรูป Excel ที่ส่งมาเป๊ะๆ
-        fig_trend.update_layout(
-            title="แนวโน้มคะแนนสะสมและเปอร์เซ็นต์ผลงานทีมรายวัน (Qty & % Achievement)",
-            titlefont=dict(size=16, color="#0f172a", family="sans-serif", weight="bold"),
-            plot_bgcolor="white",
-            paper_bgcolor="white",
-            margin=dict(l=40, r=40, t=50, b=40),
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.08,
-                xanchor="right",
-                x=1
-            ),
-            xaxis=dict(
-                showgrid=False,
-                type='category',
-                tickfont=dict(size=12, color="#64748b")
-            ),
-            yaxis=dict(
-                title="คะแนนดิบสะสมรวม (Qty)",
-                titlefont=dict(color="#1a5f7a", size=12),
-                tickfont=dict(color="#1a5f7a"),
-                showgrid=True,
-                gridcolor="#f1f5f9"
-            ),
-            yaxis2=dict(
-                title="เปอร์เซ็นต์อัตราความสำเร็จ (%)",
-                titlefont=dict(color="#ea580c", size=12),
-                tickfont=dict(color="#ea580c"),
-                range=[0, 110],  # เผื่อพื้นที่ด้านบนเพื่อให้ตัวเลเบล 92% ไม่ตกขอบ
-                showgrid=False,
-                ticksuffix="%"
-            )
-        )
-        
-        st.plotly_chart(fig_trend, use_container_width=True)
+        df_trend = df_filtered.groupby("วันที่ประเมิน")["Table5.คะแนน"].mean().reset_index()
+        fig_line = px.line(df_trend, x="วันที่ประเมิน", y="Table5.คะแนน", title="แนวโน้มคุณภาพบริการรายวัน (Timeline Trend)", markers=True)
+        fig_line.add_hline(y=TARGET_SCORE, line_dash="dash", line_color="blue")
+        st.plotly_chart(fig_line, use_container_width=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
