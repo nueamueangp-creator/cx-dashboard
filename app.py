@@ -30,7 +30,7 @@ except Exception as e:
 st.sidebar.header("🔍 ตัวกรองแดชบอร์ด")
 st.sidebar.markdown("---")
 
-# 📅 [เพิ่มใหม่] ตัวกรองช่วงวันที่ประเมิน
+# 📅 ตัวกรองช่วงวันที่ประเมิน
 if "วันที่ประเมิน" in df.columns:
     min_date = df["วันที่ประเมิน"].min().date()
     max_date = df["วันที่ประเมิน"].max().date()
@@ -43,7 +43,6 @@ if "วันที่ประเมิน" in df.columns:
         max_value=max_date
     )
     
-    # ทำการกรองตามวันที่ (รองรับกรณีผู้ใช้กำลังเลือกวันที่เริ่มต้นแต่ยังไม่ได้เลือกวันที่สิ้นสุด)
     if isinstance(selected_date_range, tuple) and len(selected_date_range) == 2:
         start_date, end_date = selected_date_range
         df_filtered = df[(df["วันที่ประเมิน"].dt.date >= start_date) & (df["วันที่ประเมิน"].dt.date <= end_date)]
@@ -151,7 +150,7 @@ with col2:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 📊 โซนกราฟแถวที่ 2: ปรับกราฟความเสถียรขยายเต็มความกว้างหน้าจอ ไม่เว้นพื้นที่ว่างแล้ว
+# 📊 โซนกราฟแถวที่ 2: กราฟความเสถียรขยายเต็มหน้าจอ
 st.markdown("### 🔍 เจาะลึกความเสถียรของคุณภาพบริการ")
 
 df_box_stat = df_filtered.groupby("ชื่อ")["Table5.คะแนน"].agg(
@@ -181,12 +180,12 @@ fig_custom_box.update_traces(
 fig_custom_box.update_layout(
     hovermode="closest",
     yaxis_title="คะแนนเสถียรภาพ (Median)",
-    height=450  # ปรับความสูงกราฟให้เหมาะสมเต็มหน้าจอ
+    height=450
 )
 st.plotly_chart(fig_custom_box, use_container_width=True)
 
 # =========================================================================
-# 🧮 ส่วนที่ 4: ตารางสรุปข้อมูลประเมินผลไขว้รายวัน (แบบไม่มีแถว Total ในตาราง)
+# 🧮 ส่วนที่ 4: ตารางสรุปข้อมูลประเมินผลไขว้รายวัน (ปรับปรุงตำแหน่งคอลัมน์)
 # =========================================================================
 st.markdown("---")
 st.markdown("### 🗂️ ตารางสรุปข้อมูลประเมินผลไขว้รายวัน")
@@ -198,19 +197,16 @@ if "วันที่ประเมิน" in df_filtered.columns and not df_f
     agent_grade_map = df_pivot_prep.groupby("ชื่อ")["Performance by personal"].last().to_dict()
     df_pivot_prep["วันที่ประเมิน"] = df_pivot_prep["วันที่ประเมิน"].dt.strftime('%d/%m/%Y')
     
-    # สร้าง Pivot Table
+    # สร้าง Pivot Table (เริ่มต้นจะมีเฉพาะ คอลัมน์วันที่รายวัน)
     pivot_table = df_pivot_prep.pivot_table(
         index="ชื่อ", columns="วันที่ประเมิน", values="Table5.คะแนน", aggfunc="sum", fill_value=0
     )
     
-    # 1. แทรกคอลัมน์กลุ่มเกรดผลงานไว้หน้าสุด
-    pivot_table.insert(0, "กลุ่มผลงานปัจจุบัน", pivot_table.index.map(agent_grade_map))
-    
-    # 2. คำนวณผลรวมคะแนนดิบรายคน
-    date_columns = [col for col in pivot_table.columns if col != "กลุ่มผลงานปัจจุบัน"]
+    # 1. คำนวณผลรวมคะแนนดิบรายคน (Grand Total) ต่อท้ายกลุ่มคอลัมน์วันที่
+    date_columns = list(pivot_table.columns)
     pivot_table["Grand Total"] = pivot_table[date_columns].sum(axis=1)
     
-    # 3. คำนวณ % Achievement รายบุคคล
+    # 2. คำนวณ % Achievement รายบุคคล
     percentage_list = []
     for agent_name in pivot_table.index:
         actual_total = pivot_table.loc[agent_name, "Grand Total"]
@@ -221,14 +217,18 @@ if "วันที่ประเมิน" in df_filtered.columns and not df_f
         
     pivot_table["% Achievement (เทียบเต็ม)"] = percentage_list
     
-    # 💥 [ปรับตามคำสั่ง] 1. แสดงผลรวมสะสมภาพรวมทั้งหมดเด่นๆ บนหัวตารางแทนการเอาใส่ในเนื้อตาราง
+    # 💥 [ปรับปรุงใหม่] 3. ใส่กลุ่มผลงานปัจจุบันต่อท้ายสุด อยู่ข้างๆ % ตามที่ต้องการ
+    grade_list = [agent_grade_map.get(agent_name, "-") for agent_name in pivot_table.index]
+    pivot_table["กลุ่มผลงานปัจจุบัน"] = grade_list
+    
+    # 4. แสดงผลรวมสะสมภาพรวมทั้งหมดบนหัวตาราง
     total_score_sum = pivot_table["Grand Total"].sum()
     total_possible_all = len(df_filtered) * FULL_SCORE
     total_pct_all = (total_score_sum / total_possible_all) * 100
     
     st.success(f"📊 **ภาพรวมของพนักงานทั้งหมดที่ถูกเลือก:** คะแนนสะสมรวมกันทำได้จริง **{int(total_score_sum):,} / {int(total_possible_all):,} คะแนน** (คิดเป็นเฉลี่ยรวม **{total_pct_all:.1f}%** จากคะแนนเต็มทั้งหมด)")
     
-    # 💥 [ปรับตามคำสั่ง] 2. ส่งตารางขึ้นสตรีมลิตโดยไม่มีแถว Grand Total มาคั่นข้อมูลให้สับสนอีกต่อไป
+    # 5. แสดงผลตารางคลีนๆ ไม่มีแถวรวมให้รกสายตา
     st.dataframe(pivot_table, use_container_width=True)
 else:
     st.info("💡 ไม่มีข้อมูลแสดงผลในตารางเนื่องจากตัวกรอง")
