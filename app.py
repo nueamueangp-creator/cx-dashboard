@@ -156,7 +156,7 @@ with col2:
 
         fig_combo = go.Figure()
 
-        # 1. แท่งกราฟ (Bar Chart) แสดงคะแนนดิบรวมรายวัน -> อ้างอิงแกน Y ซ้าย (y1)
+        # 1. แท่งกราฟ (Bar Chart) แสดงคะแนนดิบรวมรายวัน -> อ้างอิงแกน Y ซ้าย (y)
         fig_combo.add_trace(
             go.Bar(
                 x=df_trend["วันที่_str"],
@@ -165,9 +165,8 @@ with col2:
                 marker_color="#1a6582",  # สีน้ำเงินเข้ม
                 text=df_trend["sum_score"],
                 textposition="inside",
-                insidetextanchor="bottom",
                 textfont=dict(color="white", weight="bold"),
-                yaxis="y1"
+                yaxis="y"
             )
         )
 
@@ -288,7 +287,7 @@ if "วันที่ประเมิน" in df_filtered.columns and not df_f
         
     pivot_table["% Achievement (เทียบเต็ม)"] = percentage_list
     
-    # 💥 [ปรับปรุงใหม่] 3. ใส่กลุ่มผลงานปัจจุบันต่อท้ายสุด อยู่ข้างๆ % ตามที่ต้องการ
+    # 3. ใส่กลุ่มผลงานปัจจุบันต่อท้ายสุด อยู่ข้างๆ % ตามที่ต้องการ
     grade_list = [agent_grade_map.get(agent_name, "-") for agent_name in pivot_table.index]
     pivot_table["กลุ่มผลงานปัจจุบัน"] = grade_list
     
