@@ -131,88 +131,94 @@ with kpi4:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 📈 โซนกราฟแถวที่ 1: การจัดอันดับและแนวโน้ม
-st.markdown("### 📈 อันดับผลงานและแนวโน้มคุณภาพ")
-col1, col2 = st.columns(2)
+# =========================================================================
+# 📊 โซนกราฟที่ 1: อันดับผลงานรายบุคคล (ขยายเต็มหน้าจอ กว้างสะใจ)
+# =========================================================================
+st.markdown("### 🥇 อันดับผลงานรายบุคคล")
+df_agent = df_filtered.groupby("Shift" if "Shift" in df_filtered.columns else "ชื่อ")["Table5.คะแนน"].mean().reset_index().sort_values(by="Table5.คะแนน")
+y_col = "Shift" if "Shift" in df_agent.columns else "ชื่อ"
 
-with col1:
-    df_agent = df_filtered.groupby("Shift" if "Shift" in df_filtered.columns else "ชื่อ")["Table5.คะแนน"].mean().reset_index().sort_values(by="Table5.คะแนน")
-    y_col = "Shift" if "Shift" in df_agent.columns else "ชื่อ"
-    fig_bar = px.bar(df_agent, x="Table5.คะแนน", y=y_col, orientation='h',
-                     title=f"คะแนนเฉลี่ยรายบุคคล (เปรียบเทียบกับเป้าหมาย {TARGET_PERCENTAGE}%)",
-                     color="Table5.คะแนน", color_continuous_scale="RdYlGn")
-    fig_bar.add_vline(x=TARGET_SCORE, line_dash="dash", line_color="blue", annotation_text=f"เป้าหมาย 90% ({TARGET_SCORE})", annotation_position="top right")
-    st.plotly_chart(fig_bar, use_container_width=True)
+fig_bar = px.bar(df_agent, x="Table5.คะแนน", y=y_col, orientation='h',
+                 title=f"คะแนนเฉลี่ยรายบุคคล (เปรียบเทียบกับเป้าหมาย {TARGET_PERCENTAGE}%)",
+                 color="Table5.คะแนน", color_continuous_scale="RdYlGn")
+fig_bar.add_vline(x=TARGET_SCORE, line_dash="dash", line_color="blue", annotation_text=f"เป้าหมาย 90% ({TARGET_SCORE})", annotation_position="top right")
 
-with col2:
-    if "วันที่ประเมิน" in df_filtered.columns:
-        df_trend = df_filtered.groupby("วันที่ประเมิน").agg(
-            sum_score=("Table5.คะแนน", "sum"),
-            count_cases=("Table5.คะแนน", "count")
-        ).reset_index()
-        
-        df_trend["pct_score"] = (df_trend["sum_score"] / (df_trend["count_cases"] * FULL_SCORE)) * 100
-        df_trend["วันที่_str"] = df_trend["วันที่ประเมิน"].dt.strftime('%d/%m/%Y')
-
-        # 🛠️ ปรับ shared_xaxes=False เพื่อให้แสดงแกนวันที่ของใครของมันชัดเจน
-        fig_split = make_subplots(
-            rows=2, cols=1, 
-            shared_xaxes=False, 
-            vertical_spacing=0.18, # เพิ่มช่องว่างตรงกลางให้พอดีกับอักษรวันที่
-            subplot_titles=("📈 แนวโน้ม % ประสิทธิภาพรายวัน (% Performance)", "📊 แนวโน้มคะแนนสะสมรวมรายวัน (Sum Score)")
-        )
-
-        # 1. กราฟบน (Row 1): กราฟเส้น % คะแนน
-        fig_split.add_trace(
-            go.Scatter(
-                x=df_trend["วันที่_str"],
-                y=df_trend["pct_score"],
-                name="% คะแนน",
-                mode="lines+markers+text",
-                line=dict(color="#e66f21", width=3),  
-                marker=dict(size=8, symbol="circle", line=dict(color="white", width=1.5)),  
-                text=df_trend["pct_score"].round(0).astype(int).astype(str) + "%",
-                textposition="top center",  
-                textfont=dict(weight="bold", color="#b45309", size=11)
-            ),
-            row=1, col=1
-        )
-
-        # 2. กราฟล่าง (Row 2): กราฟแท่งคะแนนดิบ
-        max_y_value = df_trend["sum_score"].max() if not df_trend.empty else 100
-        fig_split.add_trace(
-            go.Bar(
-                x=df_trend["วันที่_str"],
-                y=df_trend["sum_score"],
-                name="คะแนนรวม (Sum)",
-                marker_color="#1a6582",  
-                text=df_trend["sum_score"],
-                textposition="outside",  
-                textfont=dict(color="#334155", weight="bold")
-            ),
-            row=2, col=1
-        )
-
-        # 3. สั่งแสดงข้อมูลแกน X (วันที่ประเมิน) และแกน Y ของทั้งสองกราฟให้ครบถ้วน
-        fig_split.update_yaxes(title_text="% คะแนน", ticksuffix="%", range=[0, 115], row=1, col=1)
-        fig_split.update_xaxes(title_text="วันที่ประเมิน", type="category", showticklabels=True, row=1, col=1) # 👈 เปิดแสดงวันที่ของกราฟบน
-        
-        fig_split.update_yaxes(title_text="Sum of คะแนน", range=[0, max_y_value * 1.25], row=2, col=1)
-        fig_split.update_xaxes(title_text="วันที่ประเมิน", type="category", showticklabels=True, row=2, col=1) # 👈 เปิดแสดงวันที่ของกราฟล่าง
-
-        fig_split.update_layout(
-            title_text="แนวโน้มคุณภาพบริการรายวัน (แยกการแสดงผลบน-ล่าง)",
-            hovermode="x unified",
-            showlegend=False,
-            height=650, # เพิ่มความสูงขึ้นอีกนิดเพื่อรองรับแกนวันที่ชุดบน
-            margin=dict(l=40, r=40, t=60, b=40)
-        )
-        
-        st.plotly_chart(fig_split, use_container_width=True)
+# ตั้งความสูงให้เหมาะกับจำนวนคน ยิ่งคนเยอะกราฟจะขยายความสูงตามไปเอง
+fig_bar.update_layout(height=150 + (len(df_agent) * 30))
+st.plotly_chart(fig_bar, use_container_width=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 📊 โซนกราฟแถวที่ 2: กราฟความเสถียรขยายเต็มหน้าจอ
+# =========================================================================
+# 📈 โซนกราฟที่ 2: แนวโน้มคุณภาพบริการรายวัน (แยกการแสดงผลบน-ล่าง ขยายเต็มหน้าจอเช่นกัน)
+# =========================================================================
+st.markdown("### 📈 แนวโน้มคุณภาพบริการรายวัน")
+if "วันที่ประเมิน" in df_filtered.columns:
+    df_trend = df_filtered.groupby("วันที่ประเมิน").agg(
+        sum_score=("Table5.คะแนน", "sum"),
+        count_cases=("Table5.คะแนน", "count")
+    ).reset_index()
+    
+    df_trend["pct_score"] = (df_trend["sum_score"] / (df_trend["count_cases"] * FULL_SCORE)) * 100
+    df_trend["壓日_str"] = df_trend["วันที่ประเมิน"].dt.strftime('%d/%m/%Y')
+
+    fig_split = make_subplots(
+        rows=2, cols=1, 
+        shared_xaxes=False, 
+        vertical_spacing=0.18, 
+        subplot_titles=("📈 แนวโน้ม % ประสิทธิภาพรายวัน (% Performance)", "📊 แนวโน้มคะแนนสะสมรวมรายวัน (Sum Score)")
+    )
+
+    # 1. กราฟบน (Row 1): กราฟเส้น % คะแนน
+    fig_split.add_trace(
+        go.Scatter(
+            x=df_trend["壓日_str"],
+            y=df_trend["pct_score"],
+            name="% คะแนน",
+            mode="lines+markers+text",
+            line=dict(color="#e66f21", width=3),  
+            marker=dict(size=8, symbol="circle", line=dict(color="white", width=1.5)),  
+            text=df_trend["pct_score"].round(0).astype(int).astype(str) + "%",
+            textposition="top center",  
+            textfont=dict(weight="bold", color="#b45309", size=11)
+        ),
+        row=1, col=1
+    )
+
+    # 2. กราฟล่าง (Row 2): กราฟแท่งคะแนนดิบ
+    max_y_value = df_trend["sum_score"].max() if not df_trend.empty else 100
+    fig_split.add_trace(
+        go.Bar(
+            x=df_trend["壓日_str"],
+            y=df_trend["sum_score"],
+            name="คะแนนรวม (Sum)",
+            marker_color="#1a6582",  
+            text=df_trend["sum_score"],
+            textposition="outside",  
+            textfont=dict(color="#334155", weight="bold")
+        ),
+        row=2, col=1
+    )
+
+    # 3. จัดการ Layout สเกลแต่ละแกน
+    fig_split.update_yaxes(title_text="% คะแนน", ticksuffix="%", range=[0, 115], row=1, col=1)
+    fig_split.update_xaxes(title_text="วันที่ประเมิน", type="category", showticklabels=True, row=1, col=1)
+    
+    fig_split.update_yaxes(title_text="Sum of คะแนน", range=[0, max_y_value * 1.25], row=2, col=1)
+    fig_split.update_xaxes(title_text="วันที่ประเมิน", type="category", showticklabels=True, row=2, col=1)
+
+    fig_split.update_layout(
+        hovermode="x unified",
+        showlegend=False,
+        height=650, 
+        margin=dict(l=40, r=40, t=40, b=40)
+    )
+    
+    st.plotly_chart(fig_split, use_container_width=True)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# 📊 โซนกราฟแถวที่ 3: กราฟความเสถียรขยายเต็มหน้าจอ
 st.markdown("### 🔍 เจาะลึกความเสถียรของคุณภาพบริการ")
 
 df_box_stat = df_filtered.groupby("Shift" if "Shift" in df_filtered.columns else "ชื่อ")["Table5.คะแนน"].agg(
@@ -248,7 +254,7 @@ fig_custom_box.update_layout(
 st.plotly_chart(fig_custom_box, use_container_width=True)
 
 # =========================================================================
-# 🧮 ส่วนที่ 4: ตารางสรุปข้อมูลประเมินผลไขว้รายวัน (ปรับปรุงตำแหน่งคอลัมน์)
+# 🧮 ส่วนที่ 5: ตารางสรุปข้อมูลประเมินผลไขว้รายวัน
 # =========================================================================
 st.markdown("---")
 st.markdown("### 🗂️ ตารางสรุปข้อมูลประเมินผลไขว้รายวัน")
