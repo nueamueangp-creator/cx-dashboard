@@ -68,7 +68,6 @@ else:
 # =========================================================================
 # 🎨 ส่วนที่ 3: หน้าตาแดชบอร์ด (UI)
 # =========================================================================
-# แก้ไขปัญหาวงเล็บปีกกาเรียบร้อยแล้วเพื่อให้แสดงผลจำนวนเคสได้ถูกต้อง
 st.markdown(
     f"""
     <script src="https://cdn.tailwindcss.com"></script>
@@ -131,16 +130,13 @@ with col2:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 📊 โซนกราฟแถวที่ 2: 3) กราฟแบ่งกลุ่ม และ 4) กราฟเพิ่มประสิทธิภาพวิเคราะห์ความเสถียร
+# 📊 โซนกราฟแถวที่ 2: กราฟแบ่งกลุ่ม และ กราฟความเสถียร
 st.markdown("### 🔍 เจาะลึกการแบ่งกลุ่มพนักงานและความเสถียรของคุณภาพ")
 col3, col4 = st.columns(2)
 
 with col3:
-    # 3) กราฟแบ่งกลุ่ม (Stacked Bar Chart) แสดงจำนวนสัดส่วนเกรดที่แต่ละคนได้รับ
     fig_stack = px.bar(
-        df_filtered, 
-        y="ชื่อ", 
-        color="Performance by personal",
+        df_filtered, y="ชื่อ", color="Performance by personal",
         title="สัดส่วนเกรดประเมินที่ได้รับแบ่งกลุ่มรายบุคคล",
         labels={"Performance by personal": "เกรดผลงาน"},
         category_orders={"Performance by personal": ["Excellent", "Good", "Fair", "Need Improve"]},
@@ -149,17 +145,41 @@ with col3:
     st.plotly_chart(fig_stack, use_container_width=True)
 
 with col4:
-    # 4) กราฟวิเคราะห์ความเสถียรของคุณภาพบริการ (Box Plot)
     fig_box = px.box(
-        df_filtered, 
-        x="ชื่อ", 
-        y="Table5.คะแนน", 
-        title="วิเคราะห์ความเสถียรของคุณภาพบริการ (ความกว้างกล่อง = คะแนนแกว่ง)",
-        color="ชื่อ"
+        df_filtered, x="ชื่อ", y="Table5.คะแนน", 
+        title="วิเคราะห์ความเสถียรของคุณภาพบริการ (ความกว้างกล่อง = คะแนนแกว่ง)", color="ชื่อ"
     )
     st.plotly_chart(fig_box, use_container_width=True)
 
-# 📋 ตารางข้อมูลดิบด้านล่างสุด
+# =========================================================================
+# 🧮 ส่วนที่ 4: ตาราง PIVOT TABLE แบบเดียวกับ Excel (ตามภาพบรีฟชุดใหม่)
+# =========================================================================
 st.markdown("---")
-st.markdown("### 📋 ตารางข้อมูลการประเมินผล (สอดคล้องตามตัวกรองด้านข้าง)")
-st.dataframe(df_filtered, use_container_width=True, hide_index=True)
+st.markdown("### 🗂️ ตารางสรุปข้อมูลประเมินผลไขว้รายวัน (Pivot Table แบบ Excel)")
+
+if "วันที่ประเมิน" in df_filtered.columns and not df_filtered.empty:
+    # คัดลอกข้อมูลมาทำตารางแยกเพื่อไม่ให้กระทบกราฟ
+    df_pivot_prep = df_filtered.copy()
+    
+    # จัดฟอร์แมตวันที่ให้สวยงามแบบใน Excel (วัน/เดือน/ปี ค.ศ.)
+    df_pivot_prep["วันที่ประเมิน"] = df_pivot_prep["วันที่ประเมิน"].dt.strftime('%d/%m/%Y')
+    
+    # สั่งสร้าง Pivot Table: แถว = ชื่อ, คอลัมน์ = วันที่ประเมิน, ค่า = ผลรวมของคะแนน
+    pivot_table = df_pivot_prep.pivot_table(
+        index="ชื่อ",
+        columns="วันที่ประเมิน",
+        values="Table5.คะแนน",
+        aggfunc="sum",
+        fill_value=0
+    )
+    
+    # ➕ คำนวณหา Grand Total แนวนอน (รวมขวา)
+    pivot_table["Grand Total"] = pivot_table.sum(axis=1)
+    
+    # ➕ คำนวณหา Grand Total แนวตั้ง (รวมล่าง)
+    pivot_table.loc["Grand Total"] = pivot_table.sum(axis=0)
+    
+    # แสดงตาราง Pivot Table ออกมาบนหน้าจอแบบสวยงาม
+    st.dataframe(pivot_table, use_container_width=True)
+else:
+    st.info("💡 ไม่มีข้อมูลแสดงผลในตารางเนื่องจากตัวกรอง")
