@@ -245,56 +245,58 @@ with col2:
 st.markdown("<br>", unsafe_allow_html=True)
 
 # =========================================================================
-# 5. โซนกราฟแถวล่างสุด: วิเคราะห์ความเสถียร (แก้ไขระบบ Error Bar และล็อกสีรายบุคคล)
+# 5. โซนกราฟแถวล่างสุด: วิเคราะห์ความเสถียร (ปรับเป็นค่า Mean เพื่อให้ข้อมูลตรงกัน 100%)
 # =========================================================================
 st.markdown("### 🔍 เจาะลึกความเสถียรของคุณภาพบริการ")
 
 x_col_box = "Shift" if "Shift" in df_filtered.columns else "ชื่อ"
 
-# คำนวณค่าทางสถิติ Max, Median, Min ของรายบุคคล
+# ปรับให้ใช้ค่า Mean (ค่าเฉลี่ย) เหมือนกราฟบน เพื่อให้ตัวเลขแกนตรงกันเป๊ะ
 df_box_stat = df_filtered.groupby(x_col_box)["Table5.คะแนน"].agg(
+    Mean="mean",
     Max="max",
-    Median="median",
     Min="min"
 ).reset_index()
 
-# คำนวณระยะกางของหนวดแกน Y (Error Bars) บนและล่าง
-df_box_stat["error_plus"] = df_box_stat["Max"] - df_box_stat["Median"]
-df_box_stat["error_minus"] = df_box_stat["Median"] - df_box_stat["Min"]
+# ให้เส้นหนวด (Error Bar) แสดงระยะขอบเขตคะแนนสูงสุดและต่ำสุดที่เคยทำได้จริง
+df_box_stat["error_plus"] = df_box_stat["Max"] - df_box_stat["Mean"]
+df_box_stat["error_minus"] = df_box_stat["Mean"] - df_box_stat["Min"]
 
-# กำหนดสีที่ถูกต้องตามเกณฑ์ประเมินของค่า Median จริงรายบุคคล
-df_box_stat["color_group"] = df_box_stat["Median"].apply(get_color_by_score)
+# กำหนดสีตามค่าเฉลี่ยจริง (จะตรงกับกราฟบนร้อยเปอร์เซ็นต์)
+df_box_stat["color_group"] = df_box_stat["Mean"].apply(get_color_by_score)
 
-# สร้างกราฟความเสถียรด้วย go.Figure
+# จัดเรียงลำดับพนักงานให้ตรงกับกราฟแท่งแนวตั้งด้านบน (เรียงตามคะแนนเฉลี่ยจากน้อยไปมาก)
+df_box_stat = df_box_stat.sort_values(by="Mean")
+
 fig_custom_box = go.Figure()
 
 fig_custom_box.add_trace(go.Bar(
     x=df_box_stat[x_col_box],
-    y=df_box_stat["Median"],
+    y=df_box_stat["Mean"],
     error_y=dict(
         type='data', 
-        symmetric=False,                                # กำหนดให้หนวดบน-ล่าง ยาวไม่เท่ากันได้
-        array=df_box_stat["error_plus"].tolist(),       # ระยะหนวดด้านบน
-        arrayminus=df_box_stat["error_minus"].tolist(), # ระยะหนวดด้านล่าง
+        symmetric=False,
+        array=df_box_stat["error_plus"].tolist(),       
+        arrayminus=df_box_stat["error_minus"].tolist(), 
         visible=True, 
         thickness=1.5, 
         color="#475569"
     ),
-    marker_color=df_box_stat["color_group"].tolist(), # พ่นสีตรงตัว ไม่สับสน
+    marker_color=df_box_stat["color_group"].tolist(), 
     customdata=df_box_stat[["Max", "Min"]].values,
     hovertemplate="<b>%{x}</b><br>" +
-                  "คะแนนสูงสุด (Max): %{customdata[0]:.2f} คะแนน<br>" +
-                  "คะแนนตรงกลาง (Median): %{y:.2f} คะแนน<br>" +
-                  "คะแนนต่ำสุด (Min): %{customdata[1]:.2f} คะแนน<extra></extra>"
+                  "คะแนนสูงสุดที่เคยทำได้ (Max): %{customdata[0]:.2f} คะแนน<br>" +
+                  "คะแนนเฉลี่ยสุทธิ (Mean): %{y:.2f} คะแนน<br>" +
+                  "คะแนนต่ำสุดที่เคยทำได้ (Min): %{customdata[1]:.2f} คะแนน<extra></extra>"
 ))
 
 fig_custom_box.update_layout(
-    title="วิเคราะห์ความเสถียรของคุณภาพบริการรายบุคคล (สีตามเกณฑ์ประเมินจริง | เส้นหนวดยิ่งแคบ = คุณภาพบริการยิ่งคงเส้นคงวา)",
+    title="วิเคราะห์ความเสถียรของคุณภาพบริการรายบุคคล (เรียงตามคะแนนเฉลี่ยจริง | เส้นหนวดยิ่งแคบ = คุณภาพบริการยิ่งคงเส้นคงวา)",
     hovermode="closest",
     xaxis_title=x_col_box,
-    yaxis_title="คะแนนเสถียรภาพ (Median)",
+    yaxis_title="คะแนนเฉลี่ยสะสม (Mean)",
     height=480,
-    xaxis=dict(type='category')
+    xaxis=dict(type='category') # รักษาระดับการจัดเรียงจากน้อยไปมากไว้
 )
 st.plotly_chart(fig_custom_box, use_container_width=True)
 
@@ -308,10 +310,10 @@ if "วันที่ประเมิน" in df_filtered.columns and not df_f
     df_pivot_prep = df_filtered.copy()
     
     idx_col = "Shift" if "Shift" in df_pivot_prep.columns else "ชื่อ"
-    work_days_per_agent = df_pivot_prep.groupby(idx_col)["壓ันที่ประเมิน"].nunique() if "壓ันที่ประเมิน" in df_pivot_prep.columns else df_pivot_prep.groupby(idx_col)["วันที่ประเมิน"].nunique()
+    work_days_per_agent = df_pivot_prep.groupby(idx_col)["วันที่ประเมิน"].nunique()
     
     agent_grade_map = df_pivot_prep.groupby(idx_col)["Performance by personal"].last().to_dict()
-    df_pivot_prep["วันที่_str"] = df_pivot_prep["壓ันที่ประเมิน"].dt.strftime('%d/%m/%Y') if "壓ันที่ประเมิน" in df_pivot_prep.columns else df_pivot_prep["วันที่ประเมิน"].dt.strftime('%d/%m/%Y')
+    df_pivot_prep["วันที่_str"] = df_pivot_prep["วันที่ประเมิน"].dt.strftime('%d/%m/%Y')
     
     pivot_table = df_pivot_prep.pivot_table(
         index=idx_col, columns="วันที่_str", values="Table5.คะแนน", aggfunc="sum", fill_value=0
