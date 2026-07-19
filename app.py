@@ -36,7 +36,7 @@ with col2:
         # แปลงรูปแบบวันที่สำหรับการแสดงผลบนแกน X ให้สวยงาม
         df_trend["วันที่_แสดงผล"] = df_trend["วันที่ประเมิน"].dt.strftime('%d/%m/%Y')
         
-        # สร้าง subplot ที่มี 2 แกนวาย
+        # สร้าง subplot ที่มี 2 แกนวาย (Dual-Axis)
         fig_trend = make_subplots(specs=[[{"secondary_y": True}]])
         
         # 1. เพิ่มแผนภูมิแท่ง (Bar Chart) แสดงคะแนนรวมสะสม (Qty) ที่แกนหลักฝั่งซ้าย
@@ -45,9 +45,10 @@ with col2:
                 x=df_trend["วันที่_แสดงผล"],
                 y=df_trend["Sum_Score"],
                 name="คะแนนดิบสะสมรวม (Qty)",
-                marker=dict(color="#1a5f7a", cornerradius=5),
+                marker=dict(color="#1a5f7a"),
                 text=df_trend["Sum_Score"],
-                textposition="inside",  # แสดงป้ายตัวเลขคะแนนรวมสะสมไว้ด้านในแท่งเหมือนในรูป
+                textposition="inside",  # แสดงป้ายตัวเลขคะแนนรวมสะสมไว้ด้านในแท่ง
+                insidetextanchor="bottom",  # ล็อกตำแหน่งตัวเลขให้อยู่ด้านล่างภายในแท่งเหมือนในรูป
                 textfont=dict(color="white", size=14, family="sans-serif", weight="bold"),
                 hovertemplate="วันที่: %{x}<br>คะแนนรวม: %{y} คะแนน<extra></extra>"
             ),
@@ -66,7 +67,7 @@ with col2:
                 text=df_trend["Pct_Text"],
                 textposition="top center",  # แสดงตัวเลข % ลอยเด่นอยู่เหนือจุดบนเส้นกราฟ
                 textfont=dict(color="#1e293b", size=13, family="sans-serif", weight="bold"),
-                hovertemplate="วันที่: %{x}<br>เปอร์เซ็นต์ความพึงพอใจ: %{text}<extra></extra>"
+                hovertemplate="วันที่: %{x}<br>เปอร์เซ็นต์: %{text}<extra></extra>"
             ),
             secondary_y=True
         )
