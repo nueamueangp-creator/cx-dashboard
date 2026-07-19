@@ -136,7 +136,6 @@ col1, col2 = st.columns(2)
 
 with col1:
     df_agent = df_filtered.groupby("Shift" if "Shift" in df_filtered.columns else "ชื่อ")["Table5.คะแนน"].mean().reset_index().sort_values(by="Table5.คะแนน")
-    # เปลี่ยนชื่อแกน Y ตามเงื่อนไขความปลอดภัยข้อมูล
     y_col = "Shift" if "Shift" in df_agent.columns else "ชื่อ"
     fig_bar = px.bar(df_agent, x="Table5.คะแนน", y=y_col, orientation='h',
                      title=f"คะแนนเฉลี่ยรายบุคคล (เปรียบเทียบกับเป้าหมาย {TARGET_PERCENTAGE}%)",
@@ -146,19 +145,17 @@ with col1:
 
 with col2:
     if "วันที่ประเมิน" in df_filtered.columns:
-        # เตรียมข้อมูลรายวันสำหรับกราฟผสม 2 แกน (Bar + Line) ตามรูปแบบภาพที่ 2
         df_trend = df_filtered.groupby("วันที่ประเมิน").agg(
             sum_score=("Table5.คะแนน", "sum"),
             count_cases=("Table5.คะแนน", "count")
         ).reset_index()
         
-        # คำนวณเปอร์เซ็นต์คะแนนจริงเทียบกับคะแนนเต็มของจำนวนเคสในวันนั้นๆ
         df_trend["pct_score"] = (df_trend["sum_score"] / (df_trend["count_cases"] * FULL_SCORE)) * 100
         df_trend["วันที่_str"] = df_trend["วันที่ประเมิน"].dt.strftime('%d/%m/%Y')
 
         fig_combo = go.Figure()
 
-        # 1. แท่งกราฟ (Bar Chart)
+        # 1. แท่งกราฟ (Bar Chart) -> ขยับตัวเลขคะแนนดิบขึ้นไปอยู่ด้านบนนอกแท่งเล็กน้อย
         max_y_value = df_trend["sum_score"].max() if not df_trend.empty else 100
         fig_combo.add_trace(
             go.Bar(
@@ -173,15 +170,15 @@ with col2:
             )
         )
 
-        # 2. กราฟเส้น (Line Chart) -> ลอยอยู่ด้านบนสุดเสมอ
+        # 2. กราฟเส้น (Line Chart) -> ปรับแต่งให้ลอยอยู่ชั้นบนสุด
         fig_combo.add_trace(
             go.Scatter(
                 x=df_trend["วันที่_str"],
                 y=df_trend["pct_score"],
                 name="% คะแนน",
                 mode="lines+markers+text",
-                line=dict(color="#e66f21", width=3.5),  # เพิ่มความหนาของเส้นให้เด่นขึ้น
-                marker=dict(size=9, symbol="circle", line=dict(color="white", width=1)),  
+                line=dict(color="#e66f21", width=3.5),  
+                marker=dict(size=9, symbol="circle", line=dict(color="white", width=1.5)),  
                 text=df_trend["pct_score"].round(0).astype(int).astype(str) + "%",
                 textposition="top center",  
                 textfont=dict(weight="bold", color="#b45309", size=11),
@@ -189,29 +186,27 @@ with col2:
             )
         )
 
-        # 3. ปรับแต่ง Layout รองรับกราฟแบบ 2 แกน และการบังคับ Layer เส้นให้อยู่ด้านบน
+        # 3. ปรับสัดส่วนสเกลแกน Y แยกจากกัน เพื่อดันให้กราฟเส้นลอยหนีไม่ทับกับแท่งกราฟ
         fig_combo.update_layout(
             title="แนวโน้มคุณภาพบริการรายวัน (Sum & % Performance Trend)",
             hovermode="x unified",
             showlegend=False,
-            
-            # บังคับให้กราฟเส้นลอยทับอยู่บนกราฟแท่ง (เหนือกริตไลน์และออบเจกต์อื่น)
             barmode="overlay",
             
-            # แกน Y หลัก (ซ้าย) -> เผื่อพื้นที่ด้านบนแท่งกราฟ 15% เพื่อรองรับตัวเลขไม่ให้ชนขอบ
+            # แกน Y หลัก (ซ้าย) -> ขยายสเกลสูงสุดเพิ่มขึ้น 50% เพื่อกดให้แท่งกราฟต่ำลงมาด้านล่าง
             yaxis=dict(
                 title="Sum of Table5.คะแนน",
                 side="left",
                 showgrid=True,
-                range=[0, max_y_value * 1.15]
+                range=[0, max_y_value * 1.50]  
             ),
             
-            # แกน Y ที่สอง (ขวา) -> เผื่อระยะเผื่อตัวเลขเช่นกัน
+            # แกน Y ที่สอง (ขวา) -> ปรับให้ช่วงเริ่มต้นยกขึ้นมาอยู่ที่ 20% ถึง 110% (ดันเส้นกราฟให้ลอยขึ้นข้างบน)
             yaxis2=dict(
                 title="% คะแนน",
                 side="right",
                 overlaying="y",
-                range=[0, 115],
+                range=[20, 110],  
                 ticksuffix="%",
                 showgrid=False
             ),
@@ -277,16 +272,13 @@ if "วันที่ประเมิน" in df_filtered.columns and not df_f
     agent_grade_map = df_pivot_prep.groupby(idx_col)["Performance by personal"].last().to_dict()
     df_pivot_prep["วันที่ประเมิน"] = df_pivot_prep["วันที่ประเมิน"].dt.strftime('%d/%m/%Y')
     
-    # สร้าง Pivot Table 
     pivot_table = df_pivot_prep.pivot_table(
         index=idx_col, columns="วันที่ประเมิน", values="Table5.คะแนน", aggfunc="sum", fill_value=0
     )
     
-    # 1. คำนวณผลรวมคะแนนดิบรายคน (Grand Total)
     date_columns = list(pivot_table.columns)
     pivot_table["Grand Total"] = pivot_table[date_columns].sum(axis=1)
     
-    # 2. คำนวณ % Achievement
     percentage_list = []
     for agent_name in pivot_table.index:
         actual_total = pivot_table.loc[agent_name, "Grand Total"]
@@ -297,18 +289,15 @@ if "วันที่ประเมิน" in df_filtered.columns and not df_f
         
     pivot_table["% Achievement (เทียบเต็ม)"] = percentage_list
     
-    # 3. ใส่กลุ่มผลงานปัจจุบันต่อท้ายสุด
     grade_list = [agent_grade_map.get(agent_name, "-") for agent_name in pivot_table.index]
     pivot_table["กลุ่มผลงานปัจจุบัน"] = grade_list
     
-    # 4. แสดงผลรวมสะสมภาพรวมทั้งหมดบนหัวตาราง
     total_score_sum = pivot_table["Grand Total"].sum()
     total_possible_all = len(df_filtered) * FULL_SCORE
     total_pct_all = (total_score_sum / total_possible_all) * 100
     
     st.success(f"📊 **ภาพรวมข้อมูลที่ถูกเลือก:** คะแนนสะสมรวมกันทำได้จริง **{int(total_score_sum):,} / {int(total_possible_all):,} คะแนน** (คิดเป็นเฉลี่ยรวม **{total_pct_all:.1f}%** จากคะแนนเต็มทั้งหมด)")
     
-    # 5. แสดงผลตาราง
     st.dataframe(pivot_table, use_container_width=True)
 else:
     st.info("💡 ไม่มีข้อมูลแสดงผลในตารางเนื่องจากตัวกรอง")
