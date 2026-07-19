@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
 # 1. ตั้งค่าหน้าแดชบอร์ด
 st.set_page_config(page_title="1577 CX Performance Control", layout="wide", initial_sidebar_state="expanded")
@@ -143,10 +144,80 @@ with col1:
 
 with col2:
     if "วันที่ประเมิน" in df_filtered.columns:
-        df_trend = df_filtered.groupby("วันที่ประเมิน")["Table5.คะแนน"].mean().reset_index()
-        fig_line = px.line(df_trend, x="วันที่ประเมิน", y="Table5.คะแนน", title="แนวโน้มคุณภาพบริการรายวัน (Timeline Trend)", markers=True)
-        fig_line.add_hline(y=TARGET_SCORE, line_dash="dash", line_color="blue")
-        st.plotly_chart(fig_line, use_container_width=True)
+        # เตรียมข้อมูลรายวันสำหรับกราฟผสม 2 แกน (Bar + Line) ตามรูปแบบภาพที่ 2
+        df_trend = df_filtered.groupby("วันที่ประเมิน").agg(
+            sum_score=("Table5.คะแนน", "sum"),
+            count_cases=("Table5.คะแนน", "count")
+        ).reset_index()
+        
+        # คำนวณเปอร์เซ็นต์คะแนนจริงเทียบกับคะแนนเต็มของจำนวนเคสในวันนั้นๆ
+        df_trend["pct_score"] = (df_trend["sum_score"] / (df_trend["count_cases"] * FULL_SCORE)) * 100
+        df_trend["วันที่_str"] = df_trend["วันที่ประเมิน"].dt.strftime('%d/%m/%Y')
+
+        fig_combo = go.Figure()
+
+        # 1. แท่งกราฟ (Bar Chart) แสดงคะแนนดิบรวมรายวัน -> อ้างอิงแกน Y ซ้าย (y1)
+        fig_combo.add_trace(
+            go.Bar(
+                x=df_trend["วันที่_str"],
+                y=df_trend["sum_score"],
+                name="คะแนนรวม (Sum)",
+                marker_color="#1a6582",  # สีน้ำเงินเข้ม
+                text=df_trend["sum_score"],
+                textposition="inside",
+                insidetextanchor="bottom",
+                textfont=dict(color="white", weight="bold"),
+                yaxis="y1"
+            )
+        )
+
+        # 2. กราฟเส้น (Line Chart) แสดงเปอร์เซ็นต์ผลงาน -> อ้างอิงแกน Y ขวา (y2)
+        fig_combo.add_trace(
+            go.Scatter(
+                x=df_trend["วันที่_str"],
+                y=df_trend["pct_score"],
+                name="% คะแนน",
+                mode="lines+markers+text",
+                line=dict(color="#e66f21", width=3),  # สีส้ม
+                marker=dict(size=8),
+                text=df_trend["pct_score"].round(0).astype(int).astype(str) + "%",
+                textposition="top center",
+                textfont=dict(weight="bold"),
+                yaxis="y2"
+            )
+        )
+
+        # 3. ปรับแต่ง Layout รองรับกราฟแบบ 2 แกน (Dual Y-Axes)
+        fig_combo.update_layout(
+            title="แนวโน้มคุณภาพบริการรายวัน (Sum & % Performance Trend)",
+            hovermode="x unified",
+            showlegend=False,
+            
+            # แกน Y หลัก (ซ้าย)
+            yaxis=dict(
+                title="Sum of Table5.คะแนน",
+                side="left",
+                showgrid=True
+            ),
+            
+            # แกน Y ที่สอง (ขวา)
+            yaxis2=dict(
+                title="% คะแนน",
+                side="right",
+                overlaying="y",
+                range=[0, 105],
+                ticksuffix="%",
+                showgrid=False
+            ),
+            
+            xaxis=dict(
+                title="วันที่ประเมิน",
+                type="category"  # ป้องกันไม่ให้แกน X เพี้ยนเมื่อเว้นช่วงวัน
+            ),
+            margin=dict(l=40, r=40, t=40, b=40),
+            height=450
+        )
+        st.plotly_chart(fig_combo, use_container_width=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
