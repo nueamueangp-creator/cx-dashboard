@@ -154,15 +154,15 @@ with col2:
         df_trend["pct_score"] = (df_trend["sum_score"] / (df_trend["count_cases"] * FULL_SCORE)) * 100
         df_trend["วันที่_str"] = df_trend["วันที่ประเมิน"].dt.strftime('%d/%m/%Y')
 
-        # 🛠️ เปลี่ยนมาใช้ make_subplots แยกเป็น 2 แถว บน-ล่าง
+        # 🛠️ ปรับ shared_xaxes=False เพื่อให้แสดงแกนวันที่ของใครของมันชัดเจน
         fig_split = make_subplots(
             rows=2, cols=1, 
-            shared_xaxes=True, # ใช้แกน X ร่วมกัน (ดูวันเดียวกันได้ง่าย)
-            vertical_spacing=0.12, # ระยะห่างระหว่างกราฟบนและล่าง
+            shared_xaxes=False, 
+            vertical_spacing=0.18, # เพิ่มช่องว่างตรงกลางให้พอดีกับอักษรวันที่
             subplot_titles=("📈 แนวโน้ม % ประสิทธิภาพรายวัน (% Performance)", "📊 แนวโน้มคะแนนสะสมรวมรายวัน (Sum Score)")
         )
 
-        # 1. กราฟบน (Row 1): กราฟเส้น % คะแนนล้วนๆ ลอยตัวอิสระ
+        # 1. กราฟบน (Row 1): กราฟเส้น % คะแนน
         fig_split.add_trace(
             go.Scatter(
                 x=df_trend["วันที่_str"],
@@ -178,7 +178,7 @@ with col2:
             row=1, col=1
         )
 
-        # 2. กราฟล่าง (Row 2): กราฟแท่งคะแนนดิบสะสม ย้ายข้อความไว้ด้านบนนอกแท่ง
+        # 2. กราฟล่าง (Row 2): กราฟแท่งคะแนนดิบ
         max_y_value = df_trend["sum_score"].max() if not df_trend.empty else 100
         fig_split.add_trace(
             go.Bar(
@@ -193,16 +193,18 @@ with col2:
             row=2, col=1
         )
 
-        # 3. ตกแต่ง Layout สเกลแต่ละแกน
+        # 3. สั่งแสดงข้อมูลแกน X (วันที่ประเมิน) และแกน Y ของทั้งสองกราฟให้ครบถ้วน
         fig_split.update_yaxes(title_text="% คะแนน", ticksuffix="%", range=[0, 115], row=1, col=1)
+        fig_split.update_xaxes(title_text="วันที่ประเมิน", type="category", showticklabels=True, row=1, col=1) # 👈 เปิดแสดงวันที่ของกราฟบน
+        
         fig_split.update_yaxes(title_text="Sum of คะแนน", range=[0, max_y_value * 1.25], row=2, col=1)
-        fig_split.update_xaxes(title_text="วันที่ประเมิน", type="category", row=2, col=1)
+        fig_split.update_xaxes(title_text="วันที่ประเมิน", type="category", showticklabels=True, row=2, col=1) # 👈 เปิดแสดงวันที่ของกราฟล่าง
 
         fig_split.update_layout(
             title_text="แนวโน้มคุณภาพบริการรายวัน (แยกการแสดงผลบน-ล่าง)",
             hovermode="x unified",
             showlegend=False,
-            height=600, # เพิ่มความสูงรวมเพื่อให้กราฟทั้งสองมีพื้นที่กว้างเต็มตา
+            height=650, # เพิ่มความสูงขึ้นอีกนิดเพื่อรองรับแกนวันที่ชุดบน
             margin=dict(l=40, r=40, t=60, b=40)
         )
         
