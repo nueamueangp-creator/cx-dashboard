@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # 1. ตั้งค่าหน้าแดชบอร์ด
 st.set_page_config(page_title="1577 CX Performance Control", layout="wide", initial_sidebar_state="expanded")
@@ -153,11 +154,33 @@ with col2:
         df_trend["pct_score"] = (df_trend["sum_score"] / (df_trend["count_cases"] * FULL_SCORE)) * 100
         df_trend["วันที่_str"] = df_trend["วันที่ประเมิน"].dt.strftime('%d/%m/%Y')
 
-        fig_combo = go.Figure()
+        # 🛠️ เปลี่ยนมาใช้ make_subplots แยกเป็น 2 แถว บน-ล่าง
+        fig_split = make_subplots(
+            rows=2, cols=1, 
+            shared_xaxes=True, # ใช้แกน X ร่วมกัน (ดูวันเดียวกันได้ง่าย)
+            vertical_spacing=0.12, # ระยะห่างระหว่างกราฟบนและล่าง
+            subplot_titles=("📈 แนวโน้ม % ประสิทธิภาพรายวัน (% Performance)", "📊 แนวโน้มคะแนนสะสมรวมรายวัน (Sum Score)")
+        )
 
-        # 1. แท่งกราฟ (Bar Chart) -> ขยับตัวเลขคะแนนดิบขึ้นไปอยู่ด้านบนนอกแท่งเล็กน้อย
+        # 1. กราฟบน (Row 1): กราฟเส้น % คะแนนล้วนๆ ลอยตัวอิสระ
+        fig_split.add_trace(
+            go.Scatter(
+                x=df_trend["วันที่_str"],
+                y=df_trend["pct_score"],
+                name="% คะแนน",
+                mode="lines+markers+text",
+                line=dict(color="#e66f21", width=3),  
+                marker=dict(size=8, symbol="circle", line=dict(color="white", width=1.5)),  
+                text=df_trend["pct_score"].round(0).astype(int).astype(str) + "%",
+                textposition="top center",  
+                textfont=dict(weight="bold", color="#b45309", size=11)
+            ),
+            row=1, col=1
+        )
+
+        # 2. กราฟล่าง (Row 2): กราฟแท่งคะแนนดิบสะสม ย้ายข้อความไว้ด้านบนนอกแท่ง
         max_y_value = df_trend["sum_score"].max() if not df_trend.empty else 100
-        fig_combo.add_trace(
+        fig_split.add_trace(
             go.Bar(
                 x=df_trend["วันที่_str"],
                 y=df_trend["sum_score"],
@@ -165,60 +188,25 @@ with col2:
                 marker_color="#1a6582",  
                 text=df_trend["sum_score"],
                 textposition="outside",  
-                textfont=dict(color="#334155", weight="bold"),
-                yaxis="y"
-            )
+                textfont=dict(color="#334155", weight="bold")
+            ),
+            row=2, col=1
         )
 
-        # 2. กราฟเส้น (Line Chart) -> ปรับแต่งให้ลอยอยู่ชั้นบนสุด
-        fig_combo.add_trace(
-            go.Scatter(
-                x=df_trend["วันที่_str"],
-                y=df_trend["pct_score"],
-                name="% คะแนน",
-                mode="lines+markers+text",
-                line=dict(color="#e66f21", width=3.5),  
-                marker=dict(size=9, symbol="circle", line=dict(color="white", width=1.5)),  
-                text=df_trend["pct_score"].round(0).astype(int).astype(str) + "%",
-                textposition="top center",  
-                textfont=dict(weight="bold", color="#b45309", size=11),
-                yaxis="y2"
-            )
-        )
+        # 3. ตกแต่ง Layout สเกลแต่ละแกน
+        fig_split.update_yaxes(title_text="% คะแนน", ticksuffix="%", range=[0, 115], row=1, col=1)
+        fig_split.update_yaxes(title_text="Sum of คะแนน", range=[0, max_y_value * 1.25], row=2, col=1)
+        fig_split.update_xaxes(title_text="วันที่ประเมิน", type="category", row=2, col=1)
 
-        # 3. ปรับสัดส่วนสเกลแกน Y แยกจากกัน เพื่อดันให้กราฟเส้นลอยหนีไม่ทับกับแท่งกราฟ
-        fig_combo.update_layout(
-            title="แนวโน้มคุณภาพบริการรายวัน (Sum & % Performance Trend)",
+        fig_split.update_layout(
+            title_text="แนวโน้มคุณภาพบริการรายวัน (แยกการแสดงผลบน-ล่าง)",
             hovermode="x unified",
             showlegend=False,
-            barmode="overlay",
-            
-            # แกน Y หลัก (ซ้าย) -> ขยายสเกลสูงสุดเพิ่มขึ้น 50% เพื่อกดให้แท่งกราฟต่ำลงมาด้านล่าง
-            yaxis=dict(
-                title="Sum of Table5.คะแนน",
-                side="left",
-                showgrid=True,
-                range=[0, max_y_value * 1.50]  
-            ),
-            
-            # แกน Y ที่สอง (ขวา) -> ปรับให้ช่วงเริ่มต้นยกขึ้นมาอยู่ที่ 20% ถึง 110% (ดันเส้นกราฟให้ลอยขึ้นข้างบน)
-            yaxis2=dict(
-                title="% คะแนน",
-                side="right",
-                overlaying="y",
-                range=[20, 110],  
-                ticksuffix="%",
-                showgrid=False
-            ),
-            
-            xaxis=dict(
-                title="วันที่ประเมิน",
-                type="category"  
-            ),
-            margin=dict(l=40, r=40, t=40, b=40),
-            height=450
+            height=600, # เพิ่มความสูงรวมเพื่อให้กราฟทั้งสองมีพื้นที่กว้างเต็มตา
+            margin=dict(l=40, r=40, t=60, b=40)
         )
-        st.plotly_chart(fig_combo, use_container_width=True)
+        
+        st.plotly_chart(fig_split, use_container_width=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
