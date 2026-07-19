@@ -30,7 +30,7 @@ except Exception as e:
 st.sidebar.header("🔍 ตัวกรองแดชบอร์ด")
 st.sidebar.markdown("---")
 
-# 👤 ตัวกรองรายชื่อพนักงาน (รองรับกรณีคนเยอะ แถบจะไม่รก)
+# 👤 ตัวกรองรายชื่อพนักงาน
 agent_filter_type = st.sidebar.radio("รูปแบบการเลือกพนักงาน:", ["แสดงพนักงานทุกคน (All)", "เลือกเฉพาะบางคน"])
 all_agents = sorted(df["ชื่อ"].dropna().unique())
 
@@ -40,7 +40,7 @@ if agent_filter_type == "เลือกเฉพาะบางคน":
 else:
     df_filtered = df.copy()
 
-# 🏅 ตัวกรองเกรดผลงาน (เปลี่ยนเป็นแบบกดเลือกทีละกลุ่มเพื่อความง่าย)
+# 🏅 ตัวกรองเกรดผลงาน
 all_grades = sorted(df["Performance by personal"].dropna().unique())
 selected_grade = st.sidebar.selectbox("🏅 เลือกเกรดประเมิน:", ["ทั้งหมด (All)"] + all_grades)
 
@@ -66,9 +66,7 @@ else:
 # =========================================================================
 # 🎨 ส่วนที่ 3: หน้าตาแดชบอร์ด (UI)
 # =========================================================================
-# เขียนสไตล์แบบ Inline ป้องกันปัญหาบั๊กปีกกาซ้อน
 header_html = f"""
-<script src="https://cdn.tailwindcss.com"></script>
 <div style="background-color: #0f172a; color: white; border-radius: 1rem; padding: 1.25rem; margin-bottom: 1.5rem; border: 1px solid #1e293b; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);">
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
         <div>
@@ -97,7 +95,7 @@ with kpi4:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 📈 โซนกราฟแถวที่ 1: การจัดอันดับและแนวโน้ม (เส้นประจะเปลี่ยนเป็นเกณฑ์ 90% หรือ 22.5 คะแนน)
+# 📈 โซนกราฟแถวที่ 1: การจัดอันดับและแนวโน้ม
 st.markdown("### 📈 อันดับผลงานและแนวโน้มคุณภาพ")
 col1, col2 = st.columns(2)
 
@@ -140,15 +138,22 @@ with col4:
     st.plotly_chart(fig_box, use_container_width=True)
 
 # =========================================================================
-# 🧮 ส่วนที่ 4: ตาราง PIVOT TABLE แบบเดียวกับ Excel 
+# 🧮 ส่วนที่ 4: ตารางสรุปข้อมูลประเมินผลไขว้รายวัน (+ คำนวณ % รายบรรทัด)
 # =========================================================================
 st.markdown("---")
-st.markdown("### 🗂️ ตารางสรุปข้อมูลประเมินผลไขว้รายวัน (Pivot Table แบบ Excel)")
+st.markdown("### 🗂️ ตารางสรุปข้อมูลประเมินผลไขว้รายวัน")
 
 if "วันที่ประเมิน" in df_filtered.columns and not df_filtered.empty:
     df_pivot_prep = df_filtered.copy()
+    
+    # นับจำนวนวันที่พนักงานแต่ละคนถูกประเมินจริง (เพื่อหาคะแนนเต็มส่วนบุคคล)
+    # เช่น ทำงาน 4 วัน คะแนนเต็มควรจะเป็น 4 * 25 = 100 คะแนน
+    work_days_per_agent = df_pivot_prep.groupby("ชื่อ")["วันที่ประเมิน"].nunique()
+    
+    # แปลงรูปแบบวันที่เพื่อใช้เป็นหัวคอลัมน์
     df_pivot_prep["วันที่ประเมิน"] = df_pivot_prep["วันที่ประเมิน"].dt.strftime('%d/%m/%Y')
     
+    # สร้างตาราง Pivot
     pivot_table = df_pivot_prep.pivot_table(
         index="ชื่อ",
         columns="วันที่ประเมิน",
@@ -157,9 +162,33 @@ if "วันที่ประเมิน" in df_filtered.columns and not df_f
         fill_value=0
     )
     
+    # 1. คำนวณผลรวมคะแนนดิบที่ทำได้จริง (Grand Total)
     pivot_table["Grand Total"] = pivot_table.sum(axis=1)
-    pivot_table.loc["Grand Total"] = pivot_table.sum(axis=0)
     
+    # 2. คำนวณประสิทธิภาพเทียบกับคะแนนเต็มส่วนบุคคลรายบรรทัด
+    percentage_list = []
+    for agent_name in pivot_table.index:
+        actual_total = pivot_table.loc[agent_name, "Grand Total"]
+        days = work_days_per_agent.get(agent_name, 1) # ดึงจำนวนวันที่ประเมินจริง
+        possible_full_score = days * FULL_SCORE       # คะแนนเต็มสูงสุดที่ควรได้
+        
+        pct = (actual_total / possible_full_score) * 100
+        percentage_list.append(f"{pct:.1f}%")
+        
+    pivot_table["% Achievement (เทียบเต็ม)"] = percentage_list
+    
+    # 3. เพิ่มบรรทัดสรุปรวมท้ายตาราง (Grand Total รวมล่าง)
+    # สำหรับคอลัมน์วันที่และ Grand Total ให้ใช้ผลรวม
+    total_row = pivot_table.drop(columns=["% Achievement (เทียบเต็ม)"]).sum(axis=0)
+    
+    # สำหรับ % รวมท้ายตาราง ให้คิดจาก (ผลรวมทั้งหมด / (จำนวนเคสทั้งหมด * 25))
+    total_possible_all = len(df_filtered) * FULL_SCORE
+    total_pct_all = (total_row["Grand Total"] / total_possible_all) * 100
+    
+    # บันทึกลงแถว Grand Total ล่างสุด
+    pivot_table.loc["Grand Total"] = list(total_row) + [f"{total_pct_all:.1f}%"]
+    
+    # แสดงตารางผลลัพธ์
     st.dataframe(pivot_table, use_container_width=True)
 else:
     st.info("💡 ไม่มีข้อมูลแสดงผลในตารางเนื่องจากตัวกรอง")
