@@ -131,21 +131,39 @@ with col3:
     st.plotly_chart(fig_stack, use_container_width=True)
 
 with col4:
-    # 🛠️ ปรับกลไกตรงนี้ใหม่ทั้งหมดเพื่อบล็อกข้อมูลอัตโนมัติของสถิติ Box Plot
-    fig_box = px.box(
-        df_filtered, x="ชื่อ", y="Table5.คะแนน", 
-        title="วิเคราะห์ความเสถียรของคุณภาพบริการ (ความกว้างกล่อง = คะแนนแกว่ง)", color="ชื่อ"
+    # 🛠️ แปลงกลไกเป็น Custom Stat Bar: คำนวณหา Max, Median, Min ของจริงเอง เพื่อควบคุมเนื้อหา Hover ได้ 100%
+    df_box_stat = df_filtered.groupby("ชื่อ")["Table5.คะแนน"].agg(
+        Max="max",
+        Median="median",
+        Min="min"
+    ).reset_index()
+    
+    # คำนวณระยะแกว่งเพื่อใช้ทำเป็นเส้นหนวดบน-ล่าง
+    df_box_stat["error_plus"] = df_box_stat["Max"] - df_box_stat["Median"]
+    df_box_stat["error_minus"] = df_box_stat["Median"] - df_box_stat["Min"]
+
+    fig_custom_box = px.bar(
+        df_box_stat, x="ชื่อ", y="Median",
+        error_y="error_plus", error_y_minus="error_minus",
+        title="วิเคราะห์ความเสถียรของคุณภาพบริการ (ความยาวเส้นหนวด = คะแนนแกว่ง)",
+        color="ชื่อ"
     )
-    # บังคับลบหน้าต่าง Hover ที่ระบบสร้างใหม่อัตโนมัติออกทั้งหมด
-    fig_box.update_layout(
-        hovermode=False
+
+    # สั่งให้เมาส์ชี้แล้วโชว์ข้อความที่กระชับและลบคำซ้ำซ้อนออกทั้งหมดอย่างแท้จริง
+    fig_custom_box.update_traces(
+        hovertemplate="<b>%{x}</b><br>" +
+                      "คะแนนสูงสุด (Max): %{customdata[0]} คะแนน<br>" +
+                      "คะแนนตรงกลาง (Median): %{y} คะแนน<br>" +
+                      "คะแนนต่ำสุด (Min): %{customdata[1]} คะแนน<extra></extra>",
+        customdata=df_box_stat[["Max", "Min"]].values
     )
-    # ปรับแต่งการตอบสนองเฉพาะจุดให้เป็นค่าว่าง (Clean กล่องข้อความแบบถาวร)
-    fig_box.update_traces(
-        hoverinfo="none",
-        hovertemplate=None
+    
+    # เปิด hovermode ให้กลับมาทำงานเฉพาะตัวกล่องข้อมูลดีไซน์ใหม่
+    fig_custom_box.update_layout(
+        hovermode="closest",
+        yaxis_title="คะแนนเสถียรภาพ (Median)"
     )
-    st.plotly_chart(fig_box, use_container_width=True)
+    st.plotly_chart(fig_custom_box, use_container_width=True)
 
 # =========================================================================
 # 🧮 ส่วนที่ 4: ตารางสรุปข้อมูลประเมินผลไขว้รายวัน (+ คำนวณ % รายบรรทัด)
