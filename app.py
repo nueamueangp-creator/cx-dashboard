@@ -146,7 +146,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 st.markdown("### 📈 อันดับผลงานและแนวโน้มคุณภาพ")
 col1, col2 = st.columns(2)
 
-# 👈 คอลัมน์ซ้าย: กราฟเฉลี่ยรายบุคคล (ปรับสีตามเกณฑ์ประเมิน)
+# 👈 คอลัมน์ซ้าย: กราฟเฉลี่ยรายบุคคล (ปรับสีตามเกณฑ์ประเมินจริง)
 with col1:
     df_agent = df_filtered.groupby("Shift" if "Shift" in df_filtered.columns else "ชื่อ")["Table5.คะแนน"].mean().reset_index().sort_values(by="Table5.คะแนน")
     y_col = "Shift" if "Shift" in df_agent.columns else "ชื่อ"
@@ -159,7 +159,7 @@ with col1:
         x=df_agent["Table5.คะแนน"],
         y=df_agent[y_col],
         orientation='h',
-        marker_color=df_agent["color_group"], # 🎨 ใส่สีตามฟังก์ชันเกณฑ์ประเมิน
+        marker_color=df_agent["color_group"], # 🎨 ใส่สีตามเกณฑ์ประเมิน
         text=df_agent["Table5.คะแนน"].round(2),
         textposition="inside",
         textfont=dict(color="white", weight="bold")
@@ -197,7 +197,7 @@ with col2:
         # 1. กราฟย่อยบน: กราฟเส้น % คะแนน
         fig_split.add_trace(
             go.Scatter(
-                x=df_trend["壓日_str"] if "壓日_str" in df_trend.columns else df_trend["วันที่_str"],
+                x=df_trend["วันที่_str"],
                 y=df_trend["pct_score"],
                 name="% คะแนน",
                 mode="lines+markers+text",
@@ -214,7 +214,7 @@ with col2:
         max_y_value = df_trend["sum_score"].max() if not df_trend.empty else 100
         fig_split.add_trace(
             go.Bar(
-                x=df_trend["壓日_str"] if "壓日_str" in df_trend.columns else df_trend["壓日_str"] if "壓日_str" in df_trend.columns else df_trend["วันที่_str"],
+                x=df_trend["วันที่_str"],
                 y=df_trend["sum_score"],
                 name="คะแนนรวม (Sum)",
                 marker_color="#1a6582",  
@@ -242,11 +242,13 @@ with col2:
 st.markdown("<br>", unsafe_allow_html=True)
 
 # =========================================================================
-# 📊 โซนกราฟแถวล่างสุด: กราฟความเสถียร (ปรับสีตามเกณฑ์ด้วยเช่นกันให้เข้าคู่กัน)
+# 📊 โซนกราฟแถวล่างสุด: กราฟความเสถียร (ปรับแก้ไม่ให้ Error ปรับสีตรงเกณฑ์)
 # =========================================================================
 st.markdown("### 🔍 เจาะลึกความเสถียรของคุณภาพบริการ")
 
-df_box_stat = df_filtered.groupby("Shift" if "Shift" in df_filtered.columns else "ชื่อ")["Table5.คะแนน"].agg(
+x_col_box = "Shift" if "Shift" in df_filtered.columns else "ชื่อ"
+
+df_box_stat = df_filtered.groupby(x_col_box)["Table5.คะแนน"].agg(
     Max="max",
     Median="median",
     Min="min"
@@ -254,18 +256,18 @@ df_box_stat = df_filtered.groupby("Shift" if "Shift" in df_filtered.columns else
 
 df_box_stat["error_plus"] = df_box_stat["Max"] - df_box_stat["Median"]
 df_box_stat["error_minus"] = df_box_stat["Median"] - df_box_stat["Min"]
-x_col_box = "Shift" if "Shift" in df_box_stat.columns else "Shift" if "Shift" in df_box_stat.columns else "ชื่อ"
 
-# คำนวณสีของแท่ง Median ตามเกณฑ์ประเมิน
+# คำนวณสีของแท่งตามฟังก์ชันเกณฑ์ประเมิน
 df_box_stat["color_group"] = df_box_stat["Median"].apply(get_color_by_score)
 
+# ใช้ go.Figure ปลอดภัยและกำหนดรายละเอียดแกน error bar ได้ครบถ้วน
 fig_custom_box = go.Figure()
 fig_custom_box.add_trace(go.Bar(
     x=df_box_stat[x_col_box],
     y=df_box_stat["Median"],
     error_y=dict(type='data', array=df_box_stat["error_plus"], visible=True, thickness=1.5, color="#475569"),
     error_y_minus=dict(type='data', array=df_box_stat["error_minus"], visible=True, thickness=1.5, color="#475569"),
-    marker_color=df_box_stat["color_group"], # 🎨 ปรับสีแท่งความเสถียรให้ตรงเกณฑ์ประเมิน
+    marker_color=df_box_stat["color_group"], # 🎨 เปลี่ยนสีแท่งตามเกณฑ์ประเมินจริงรายบุคคล
     customdata=df_box_stat[["Max", "Min"]].values,
     hovertemplate="<b>%{x}</b><br>" +
                   "คะแนนสูงสุด (Max): %{customdata[0]} คะแนน<br>" +
@@ -274,7 +276,7 @@ fig_custom_box.add_trace(go.Bar(
 ))
 
 fig_custom_box.update_layout(
-    title="วิเคราะห์ความเสถียรของคุณภาพบริการรายบุคคล (สีตามเกณฑ์ประเมิน | เส้นหนวดยิ่งแคบ = คุณภาพบริการยิ่งสถียร)",
+    title="วิเคราะห์ความเสถียรของคุณภาพบริการรายบุคคล (สีตามเกณฑ์ประเมิน | เส้นหนวดยิ่งแคบ = คุณภาพบริการยิ่งเสถียรคงเส้นคงวา)",
     hovermode="closest",
     xaxis_title=x_col_box,
     yaxis_title="คะแนนเสถียรภาพ (Median)",
@@ -292,7 +294,7 @@ if "วันที่ประเมิน" in df_filtered.columns and not df_f
     df_pivot_prep = df_filtered.copy()
     
     idx_col = "Shift" if "Shift" in df_pivot_prep.columns else "ชื่อ"
-    work_days_per_agent = df_pivot_prep.groupby(idx_col)["壓日_str" if "壓日_str" in df_pivot_prep.columns else "วันที่ประเมิน"].nunique()
+    work_days_per_agent = df_pivot_prep.groupby(idx_col)["วันที่ประเมิน"].nunique()
     
     agent_grade_map = df_pivot_prep.groupby(idx_col)["Performance by personal"].last().to_dict()
     df_pivot_prep["วันที่_str"] = df_pivot_prep["วันที่ประเมิน"].dt.strftime('%d/%m/%Y')
