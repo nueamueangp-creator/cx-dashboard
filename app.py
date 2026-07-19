@@ -26,7 +26,7 @@ except Exception as e:
     st.error("❌ เกิดข้อผิดพลาดในการโหลดข้อมูล")
     st.stop()
 
-# 🛠️ ฟังก์ชันกำหนดสีตามเกณฑ์จริง (คัดลอกมาจากเงื่อนไขภาพเกณฑ์การประเมินของคุณ)
+# 🛠️ ฟังก์ชันกำหนดสีตามเกณฑ์จริง 
 def get_color_by_score(score):
     if score > 22.5:
         return "#10b981"  # 🟢 Excellent (เขียว)
@@ -45,7 +45,7 @@ st.sidebar.markdown("---")
 
 # 📅 ตัวกรองช่วงวันที่ประเมิน
 if "วันที่ประเมิน" in df.columns:
-    min_date = df["วันที่ประเมิน"].min().date()
+    min_date = df["วันที่ประ--มิน"].min().date() if "วันที่ประ--มิน" in df.columns else df["วันที่ประเมิน"].min().date()
     max_date = df["วันที่ประเมิน"].max().date()
     
     st.sidebar.subheader("📅 เลือกช่วงวันที่ประเมิน")
@@ -118,7 +118,7 @@ header_html = f"""
 """
 st.markdown(header_html, unsafe_allow_html=True)
 
-# 📋 แสดงเกณฑ์การแบ่งเกรดผลงาน (Grading Rule Criteria)
+# 📋 แสดงเกณฑ์การแบ่งเกรดผลงาน
 with st.expander("📋 คลิกเพื่อดูเกณฑ์การประเมินและแบ่งเกรดพนักงาน (Grading Criteria)", expanded=True):
     gc1, gc2, gc3, gc4 = st.columns(4)
     gc1.markdown("🟢 **Excellent (ดีเยี่ยม)**<br>คะแนนเฉลี่ย: **มากกว่า 22.5 คะแนน**<br>*(บรรลุเป้าหมายที่ตั้งไว้ 90% ขึ้นไป)*", unsafe_allow_html=True)
@@ -142,16 +142,18 @@ with kpi4:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
+# =========================================================================
 # 📈 โซนกราฟหลัก: แบ่ง 2 คอลัมน์ซ้าย-ขวา เท่ากันเป๊ะ
+# =========================================================================
 st.markdown("### 📈 อันดับผลงานและแนวโน้มคุณภาพ")
 col1, col2 = st.columns(2)
 
-# 👈 คอลัมน์ซ้าย: กราฟเฉลี่ยรายบุคคล (ปรับสีตามเกณฑ์ประเมินจริง)
+# 👈 คอลัมน์ซ้าย: กราฟเฉลี่ยรายบุคคล
 with col1:
     df_agent = df_filtered.groupby("Shift" if "Shift" in df_filtered.columns else "ชื่อ")["Table5.คะแนน"].mean().reset_index().sort_values(by="Table5.คะแนน")
     y_col = "Shift" if "Shift" in df_agent.columns else "ชื่อ"
     
-    # คำนวณสีประจำตัวของแต่ละคนตามคะแนนจริง
+    # คำนวณสีประจำแท่งตามเกณฑ์ประเมินจริง
     df_agent["color_group"] = df_agent["Table5.คะแนน"].apply(get_color_by_score)
     
     fig_bar = go.Figure()
@@ -159,7 +161,7 @@ with col1:
         x=df_agent["Table5.คะแนน"],
         y=df_agent[y_col],
         orientation='h',
-        marker_color=df_agent["color_group"], # 🎨 ใส่สีตามเกณฑ์ประเมิน
+        marker_color=df_agent["color_group"], 
         text=df_agent["Table5.คะแนน"].round(2),
         textposition="inside",
         textfont=dict(color="white", weight="bold")
@@ -194,7 +196,6 @@ with col2:
             subplot_titles=("📈 แนวโน้ม % ประสิทธิภาพรายวัน (% Performance)", "📊 แนวโน้มคะแนนสะสมรวมรายวัน (Sum Score)")
         )
 
-        # 1. กราฟย่อยบน: กราฟเส้น % คะแนน
         fig_split.add_trace(
             go.Scatter(
                 x=df_trend["วันที่_str"],
@@ -210,7 +211,6 @@ with col2:
             row=1, col=1
         )
 
-        # 2. กราฟย่อยล่าง: กราฟแท่งคะแนนดิบ
         max_y_value = df_trend["sum_score"].max() if not df_trend.empty else 100
         fig_split.add_trace(
             go.Bar(
@@ -242,12 +242,13 @@ with col2:
 st.markdown("<br>", unsafe_allow_html=True)
 
 # =========================================================================
-# 📊 โซนกราฟแถวล่างสุด: กราฟความเสถียร (ปรับแก้ไม่ให้ Error ปรับสีตรงเกณฑ์)
+# 📊 โซนกราฟแถวล่างสุด: กราฟความเสถียร (แก้ไขโครงสร้างใหม่ ไม่เกิด Error)
 # =========================================================================
 st.markdown("### 🔍 เจาะลึกความเสถียรของคุณภาพบริการ")
 
 x_col_box = "Shift" if "Shift" in df_filtered.columns else "ชื่อ"
 
+# เตรียมข้อมูลสรุปทางสถิติ
 df_box_stat = df_filtered.groupby(x_col_box)["Table5.คะแนน"].agg(
     Max="max",
     Median="median",
@@ -257,28 +258,23 @@ df_box_stat = df_filtered.groupby(x_col_box)["Table5.คะแนน"].agg(
 df_box_stat["error_plus"] = df_box_stat["Max"] - df_box_stat["Median"]
 df_box_stat["error_minus"] = df_box_stat["Median"] - df_box_stat["Min"]
 
-# คำนวณสีของแท่งตามฟังก์ชันเกณฑ์ประเมิน
-df_box_stat["color_group"] = df_box_stat["Median"].apply(get_color_by_score)
+# กำหนดสีในคอลัมน์ดิบเพื่อนำไปแมปสี
+df_box_stat["color_hex"] = df_box_stat["Median"].apply(get_color_by_score)
 
-# ใช้ go.Figure ปลอดภัยและกำหนดรายละเอียดแกน error bar ได้ครบถ้วน
-fig_custom_box = go.Figure()
-fig_custom_box.add_trace(go.Bar(
-    x=df_box_stat[x_col_box],
-    y=df_box_stat["Median"],
-    error_y=dict(type='data', array=df_box_stat["error_plus"], visible=True, thickness=1.5, color="#475569"),
-    error_y_minus=dict(type='data', array=df_box_stat["error_minus"], visible=True, thickness=1.5, color="#475569"),
-    marker_color=df_box_stat["color_group"], # 🎨 เปลี่ยนสีแท่งตามเกณฑ์ประเมินจริงรายบุคคล
-    customdata=df_box_stat[["Max", "Min"]].values,
-    hovertemplate="<b>%{x}</b><br>" +
-                  "คะแนนสูงสุด (Max): %{customdata[0]} คะแนน<br>" +
-                  "คะแนนตรงกลาง (Median): %{y} คะแนน<br>" +
-                  "คะแนนต่ำสุด (Min): %{customdata[1]} คะแนน<extra></extra>"
-))
+# ใช้ px.bar ทำงานร่วมกับ error_y เพื่อความเสถียรสูงสุด
+fig_custom_box = px.bar(
+    df_box_stat, 
+    x=x_col_box, 
+    y="Median",
+    error_y="error_plus",
+    error_y_minus="error_minus",
+    color="color_hex",
+    color_discrete_map={val: val for val in df_box_stat["color_hex"].unique()},
+    title="วิเคราะห์ความเสถียรของคุณภาพบริการรายบุคคล (สีตามเกณฑ์ประเมิน | เส้นหนวดยิ่งแคบ = คุณภาพบริการยิ่งคงเส้นคงวา)"
+)
 
 fig_custom_box.update_layout(
-    title="วิเคราะห์ความเสถียรของคุณภาพบริการรายบุคคล (สีตามเกณฑ์ประเมิน | เส้นหนวดยิ่งแคบ = คุณภาพบริการยิ่งเสถียรคงเส้นคงวา)",
-    hovermode="closest",
-    xaxis_title=x_col_box,
+    showlegend=False, 
     yaxis_title="คะแนนเสถียรภาพ (Median)",
     height=450
 )
