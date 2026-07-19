@@ -27,16 +27,19 @@ except Exception as e:
     st.error("❌ เกิดข้อผิดพลาดในการโหลดข้อมูล")
     st.stop()
 
-# 🛠️ ฟังก์ชันกำหนดสีตามเกณฑ์จริง 
-def get_color_by_score(score):
-    if score > 22.5:
+# 🛠️ ฟังก์ชันกำหนดสีตามชื่อ "กลุ่มผลงานปัจจุบัน (Performance Grade)" โดยตรง
+def get_color_by_grade(grade_string):
+    grade = str(grade_string).strip()
+    if "Excellent" in grade:
         return "#10b981"  # 🟢 Excellent (เขียว)
-    elif 20.0 <= score <= 22.5:
+    elif "Good" in grade:
         return "#3b82f6"  # 🔵 Good (น้ำเงิน/ฟ้า)
-    elif 15.0 <= score < 20.0:
+    elif "Fair" in grade:
         return "#f59e0b"  # 🟡 Fair (ส้ม/เหลือง)
-    else:
+    elif "Need Improve" in grade:
         return "#ef4444"  # 🔴 Need Improve (แดง)
+    else:
+        return "#cbd5e1"  # สีเทา (กรณีไม่มีข้อมูล)
 
 # =========================================================================
 # 2. ระบบตัวกรองข้อมูลแถบข้าง (SIDEBAR FILTERS)
@@ -101,6 +104,9 @@ else:
     st.warning("⚠️ ไม่พบข้อมูลที่ตรงกับตัวกรองของคุณ กรุณาปรับตัวกรองใหม่ที่แถบด้านข้าง")
     st.stop()
 
+# สร้าง Dictionary เพื่อหาเกรดล่าสุดของพนักงานแต่ละคน (อ้างอิงตลอดทั้งแดชบอร์ด)
+agent_grade_map = df_filtered.groupby("ชื่อ")["Performance by personal"].last().to_dict()
+
 # =========================================================================
 # 3. ส่วนหัวของหน้าและข้อมูลส่วนบน (UI HEADER & KPI CARDS)
 # =========================================================================
@@ -122,10 +128,10 @@ st.markdown(header_html, unsafe_allow_html=True)
 # 📋 แสดงเกณฑ์การแบ่งเกรดผลงาน
 with st.expander("📋 คลิกเพื่อดูเกณฑ์การประเมินและแบ่งเกรดพนักงาน (Grading Criteria)", expanded=True):
     gc1, gc2, gc3, gc4 = st.columns(4)
-    gc1.markdown("🟢 **Excellent (ดีเยี่ยม)**<br>คะแนนเฉลี่ย: **มากกว่า 22.5 คะแนน**<br>*(บรรลุเป้าหมายที่ตั้งไว้ 90% ขึ้นไป)*", unsafe_allow_html=True)
-    gc2.markdown("🔵 **Good (ดีตามมาตรฐาน)**<br>คะแนนเฉลี่ย: **20.0 - 22.5 คะแนน**<br>*(อยู่ในเกณฑ์มาตรฐานการบริการที่ดี)*", unsafe_allow_html=True)
-    gc3.markdown("🟡 **Fair (พอใช้)**<br>คะแนนเฉลี่ย: **15.0 - 19.9 คะแนน**<br>*(ต่ำกว่าเป้าหมายเล็กน้อย ต้องปรับปรุง)*", unsafe_allow_html=True)
-    gc4.markdown("🔴 **Need Improve (ต้องปรับปรุงด่วน)**<br>คะแนนเฉลี่ย: **ต่ำกว่า 15.0 คะแนน**<br>*(ผลงานหลุดเกณฑ์วิกฤต ต้องได้รับการโค้ช)*", unsafe_allow_html=True)
+    gc1.markdown("🟢 **Excellent (ดีเยี่ยม)**<br>กลุ่มผลงาน: **Excellent**", unsafe_allow_html=True)
+    gc2.markdown("🔵 **Good (ดีตามมาตรฐาน)**<br>กลุ่มผลงาน: **Good**", unsafe_allow_html=True)
+    gc3.markdown("🟡 **Fair (พอใช้)**<br>กลุ่มผลงาน: **Fair**", unsafe_allow_html=True)
+    gc4.markdown("🔴 **Need Improve (ต้องปรับปรุงด่วน)**<br>กลุ่มผลงาน: **Need Improve**", unsafe_allow_html=True)
 
 st.markdown("---")
 
@@ -149,29 +155,32 @@ st.markdown("<br>", unsafe_allow_html=True)
 st.markdown("### 📈 อันดับผลงานและแนวโน้มคุณภาพ")
 col1, col2 = st.columns(2)
 
-# 👈 คอลัมน์ซ้าย: กราฟแท่งจัดอันดับคะแนนเฉลี่ยรายบุคคล (ล็อกสีตามเงื่อนไขจริง)
+# 👈 คอลัมน์ซ้าย: กราฟแท่งจัดอันดับคะแนนเฉลี่ยรายบุคคล (ล็อกสีตามกลุ่มผลงานปัจจุบัน)
 with col1:
     df_agent = df_filtered.groupby("Shift" if "Shift" in df_filtered.columns else "ชื่อ")["Table5.คะแนน"].mean().reset_index().sort_values(by="Table5.คะแนน")
     y_col = "Shift" if "Shift" in df_agent.columns else "ชื่อ"
     
-    # คำนวณสีของแท่งรายบุคคลจากคะแนนจริง
-    df_agent["color_group"] = df_agent["Table5.คะแนน"].apply(get_color_by_score)
+    # ดึงเกรดผลงานปัจจุบันมาแมปสีให้ถูกต้องแม่นยำ
+    df_agent["current_grade"] = df_agent[y_col].map(agent_grade_map)
+    df_agent["color_group"] = df_agent["current_grade"].apply(get_color_by_grade)
     
     fig_bar = go.Figure()
     fig_bar.add_trace(go.Bar(
         x=df_agent["Table5.คะแนน"],
         y=df_agent[y_col],
         orientation='h',
-        marker_color=df_agent["color_group"].tolist(), 
+        marker_color=df_agent["color_group"].tolist(), # 🎨 พ่นสีตามกลุ่มผลงานปัจจุบัน
         text=df_agent["Table5.คะแนน"].round(2),
         textposition="inside",
-        textfont=dict(color="white", weight="bold")
+        textfont=dict(color="white", weight="bold"),
+        customdata=df_agent["current_grade"],
+        hovertemplate="<b>%{y}</b><br>คะแนนเฉลี่ย: %{x:.2f}<br>กลุ่มผลงานปัจจุบัน: %{customdata}<extra></extra>"
     ))
     
     fig_bar.add_vline(x=TARGET_SCORE, line_dash="dash", line_color="blue", annotation_text=f"เป้าหมาย 90% ({TARGET_SCORE})", annotation_position="top right")
     
     fig_bar.update_layout(
-        title=f"คะแนนเฉลี่ยรายบุคคล (สีตามเกณฑ์ประเมินจริง)",
+        title=f"คะแนนเฉลี่ยรายบุคคล (สีแยกตามกลุ่มผลงานปัจจุบันตรงตามเงื่อนไข)",
         xaxis_title="Table5.คะแนน",
         yaxis_title=y_col,
         height=650,
@@ -245,27 +254,28 @@ with col2:
 st.markdown("<br>", unsafe_allow_html=True)
 
 # =========================================================================
-# 5. โซนกราฟแถวล่างสุด: วิเคราะห์ความเสถียร (ปรับเป็นค่า Mean เพื่อให้ข้อมูลตรงกัน 100%)
+# 5. โซนกราฟแถวล่างสุด: วิเคราะห์ความเสถียร (ล็อกสีตามกลุ่มผลงานปัจจุบันให้ตรงกับกราฟบน)
 # =========================================================================
 st.markdown("### 🔍 เจาะลึกความเสถียรของคุณภาพบริการ")
 
 x_col_box = "Shift" if "Shift" in df_filtered.columns else "ชื่อ"
 
-# ปรับให้ใช้ค่า Mean (ค่าเฉลี่ย) เหมือนกราฟบน เพื่อให้ตัวเลขแกนตรงกันเป๊ะ
+# คำนวณค่าทางสถิติ Max, Mean, Min ของรายบุคคล
 df_box_stat = df_filtered.groupby(x_col_box)["Table5.คะแนน"].agg(
     Mean="mean",
     Max="max",
     Min="min"
 ).reset_index()
 
-# ให้เส้นหนวด (Error Bar) แสดงระยะขอบเขตคะแนนสูงสุดและต่ำสุดที่เคยทำได้จริง
+# คำนวณระยะกางของหนวดแกน Y (Error Bars) บนและล่าง
 df_box_stat["error_plus"] = df_box_stat["Max"] - df_box_stat["Mean"]
 df_box_stat["error_minus"] = df_box_stat["Mean"] - df_box_stat["Min"]
 
-# กำหนดสีตามค่าเฉลี่ยจริง (จะตรงกับกราฟบนร้อยเปอร์เซ็นต์)
-df_box_stat["color_group"] = df_box_stat["Mean"].apply(get_color_by_score)
+# แมปสีจากกลุ่มผลงานปัจจุบัน (Performance Grade) เพื่อให้ตรงกับกราฟบน 100%
+df_box_stat["current_grade"] = df_box_stat[x_col_box].map(agent_grade_map)
+df_box_stat["color_group"] = df_box_stat["current_grade"].apply(get_color_by_grade)
 
-# จัดเรียงลำดับพนักงานให้ตรงกับกราฟแท่งแนวตั้งด้านบน (เรียงตามคะแนนเฉลี่ยจากน้อยไปมาก)
+# จัดเรียงลำดับตามคะแนนเฉลี่ยจากน้อยไปมาก เพื่อล้อไปกับลำดับของกราฟบน
 df_box_stat = df_box_stat.sort_values(by="Mean")
 
 fig_custom_box = go.Figure()
@@ -282,21 +292,22 @@ fig_custom_box.add_trace(go.Bar(
         thickness=1.5, 
         color="#475569"
     ),
-    marker_color=df_box_stat["color_group"].tolist(), 
-    customdata=df_box_stat[["Max", "Min"]].values,
+    marker_color=df_box_stat["color_group"].tolist(), # 🎨 พ่นสีตามกลุ่มผลงานปัจจุบัน (ตรงกับกราฟบนแน่นอน)
+    customdata=df_box_stat[["Max", "Min", "current_grade"]].values,
     hovertemplate="<b>%{x}</b><br>" +
+                  "กลุ่มผลงานปัจจุบัน: %{customdata[2]}<br>" +
                   "คะแนนสูงสุดที่เคยทำได้ (Max): %{customdata[0]:.2f} คะแนน<br>" +
                   "คะแนนเฉลี่ยสุทธิ (Mean): %{y:.2f} คะแนน<br>" +
                   "คะแนนต่ำสุดที่เคยทำได้ (Min): %{customdata[1]:.2f} คะแนน<extra></extra>"
 ))
 
 fig_custom_box.update_layout(
-    title="วิเคราะห์ความเสถียรของคุณภาพบริการรายบุคคล (เรียงตามคะแนนเฉลี่ยจริง | เส้นหนวดยิ่งแคบ = คุณภาพบริการยิ่งคงเส้นคงวา)",
+    title="วิเคราะห์ความเสถียรของคุณภาพบริการรายบุคคล (สีแยกตามกลุ่มผลงานปัจจุบัน | เส้นหนวดยิ่งแคบ = คุณภาพบริการยิ่งคงเส้นคงวา)",
     hovermode="closest",
     xaxis_title=x_col_box,
     yaxis_title="คะแนนเฉลี่ยสะสม (Mean)",
     height=480,
-    xaxis=dict(type='category') # รักษาระดับการจัดเรียงจากน้อยไปมากไว้
+    xaxis=dict(type='category')
 )
 st.plotly_chart(fig_custom_box, use_container_width=True)
 
@@ -312,7 +323,6 @@ if "วันที่ประเมิน" in df_filtered.columns and not df_f
     idx_col = "Shift" if "Shift" in df_pivot_prep.columns else "ชื่อ"
     work_days_per_agent = df_pivot_prep.groupby(idx_col)["วันที่ประเมิน"].nunique()
     
-    agent_grade_map = df_pivot_prep.groupby(idx_col)["Performance by personal"].last().to_dict()
     df_pivot_prep["วันที่_str"] = df_pivot_prep["วันที่ประเมิน"].dt.strftime('%d/%m/%Y')
     
     pivot_table = df_pivot_prep.pivot_table(
