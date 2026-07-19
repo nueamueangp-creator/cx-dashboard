@@ -68,11 +68,12 @@ else:
 # =========================================================================
 # 🎨 ส่วนที่ 3: หน้าตาแดชบอร์ด (UI)
 # =========================================================================
+# แก้ไขปัญหาวงเล็บปีกกาเรียบร้อยแล้วเพื่อให้แสดงผลจำนวนเคสได้ถูกต้อง
 st.markdown(
-    """
+    f"""
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;600;700&family=Sarabun:wght@400;500;700&display=swap" rel="stylesheet">
-    <style> * { font-family: 'Sarabun', sans-serif; } h1, h2, h3, h4 { font-family: 'Prompt', sans-serif; } </style>
+    <style> * {{ font-family: 'Sarabun', sans-serif; }} h1, h2, h3, h4 {{ font-family: 'Prompt', sans-serif; }} </style>
     
     <header class="bg-slate-900 text-white rounded-2xl p-5 mb-6 flex items-center justify-between border border-slate-800 shadow-lg">
         <div>
@@ -83,7 +84,7 @@ st.markdown(
             📊 แสดงข้อมูลตามตัวกรอง: <b>{total_records} เคส</b>
         </div>
     </header>
-    """.format(total_records=total_records),
+    """,
     unsafe_allow_html=True
 )
 
@@ -148,7 +149,7 @@ with col3:
     st.plotly_chart(fig_stack, use_container_width=True)
 
 with col4:
-    # 4) กราฟเพิ่มพิเศษ: วิเคราะห์ความเสถียรของอารมณ์/การบริการ (Box Plot)
+    # 4) กราฟวิเคราะห์ความเสถียรของคุณภาพบริการ (Box Plot)
     fig_box = px.box(
         df_filtered, 
         x="ชื่อ", 
