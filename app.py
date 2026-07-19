@@ -4,14 +4,15 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-# 1. ตั้งค่าหน้าแดชบอร์ด
+# =========================================================================
+# 1. ตั้งค่าหน้าแดชบอร์ดและโหลดข้อมูล
+# =========================================================================
 st.set_page_config(page_title="1577 CX Performance Control", layout="wide", initial_sidebar_state="expanded")
 
 # 🔗 ลิงก์ CSV ของคุณ
 sheet_csv_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRSLXaX4OFmcO8xhcoKllNThw3tFBbVCRETb5X9n6Q4gTc4Rudd9d5_wS7UZXKHm8BVVtzzq1sWgxAN/pub?output=csv"
 
 try:
-    # 2. ดึงข้อมูลและจัดการประเภทข้อมูล
     df = pd.read_csv(sheet_csv_url)
     if "วันที่ประเมิน" in df.columns:
         df["วันที่ประเมิน"] = pd.to_datetime(df["วันที่ประเมิน"])
@@ -26,7 +27,7 @@ except Exception as e:
     st.error("❌ เกิดข้อผิดพลาดในการโหลดข้อมูล")
     st.stop()
 
-# 🛠️ ฟังก์ชันกำหนดสีตามเกณฑ์จริง 
+# 🛠️ ฟังก์ชันกำหนดสีตามเกณฑ์จริง (ตรวจสอบเงื่อนไขแบบถูกต้องแม่นยำ)
 def get_color_by_score(score):
     if score > 22.5:
         return "#10b981"  # 🟢 Excellent (เขียว)
@@ -38,14 +39,14 @@ def get_color_by_score(score):
         return "#ef4444"  # 🔴 Need Improve (แดง)
 
 # =========================================================================
-# 🎛️ ส่วนที่ 2: ระบบตัวกรองข้อมูลแบบคลีน (CLEAN SIDEBAR FILTERS)
+# 2. ระบบตัวกรองข้อมูลแถบข้าง (SIDEBAR FILTERS)
 # =========================================================================
 st.sidebar.header("🔍 ตัวกรองแดชบอร์ด")
 st.sidebar.markdown("---")
 
 # 📅 ตัวกรองช่วงวันที่ประเมิน
 if "วันที่ประเมิน" in df.columns:
-    min_date = df["วันที่ประ--มิน"].min().date() if "วันที่ประ--มิน" in df.columns else df["วันที่ประเมิน"].min().date()
+    min_date = df["วันที่ประเมิน"].min().date()
     max_date = df["วันที่ประเมิน"].max().date()
     
     st.sidebar.subheader("📅 เลือกช่วงวันที่ประเมิน")
@@ -101,7 +102,7 @@ else:
     st.stop()
 
 # =========================================================================
-# 🎨 ส่วนที่ 3: หน้าตาแดชบอร์ด (UI)
+# 3. ส่วนหัวของหน้าและข้อมูลส่วนบน (UI HEADER & KPI CARDS)
 # =========================================================================
 header_html = f"""
 <div style="background-color: #0f172a; color: white; border-radius: 1rem; padding: 1.25rem; margin-bottom: 1.5rem; border: 1px solid #1e293b; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);">
@@ -128,7 +129,7 @@ with st.expander("📋 คลิกเพื่อดูเกณฑ์การ
 
 st.markdown("---")
 
-# 📊 สรุปตัวเลขสำคัญเปรียบเทียบกับเป้าหมาย 90% (KPI Cards)
+# 📊 สรุปตัวเลขสำคัญเปรียบเทียบกับเป้าหมาย (KPI Cards)
 st.markdown("### 📌 ตัวชี้วัดประสิทธิภาพเทียบกับเป้าหมาย 90%")
 kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 with kpi1:
@@ -143,17 +144,17 @@ with kpi4:
 st.markdown("<br>", unsafe_allow_html=True)
 
 # =========================================================================
-# 📈 โซนกราฟหลัก: แบ่ง 2 คอลัมน์ซ้าย-ขวา เท่ากันเป๊ะ
+# 4. โซนกราฟหลักส่วนบน: แบ่ง 2 คอลัมน์ (ซ้าย-ขวา เท่ากัน)
 # =========================================================================
 st.markdown("### 📈 อันดับผลงานและแนวโน้มคุณภาพ")
 col1, col2 = st.columns(2)
 
-# 👈 คอลัมน์ซ้าย: กราฟเฉลี่ยรายบุคคล
+# 👈 คอลัมน์ซ้าย: กราฟแท่งจัดอันดับคะแนนเฉลี่ยรายบุคคล (ล็อกสีตามเงื่อนไขจริง)
 with col1:
     df_agent = df_filtered.groupby("Shift" if "Shift" in df_filtered.columns else "ชื่อ")["Table5.คะแนน"].mean().reset_index().sort_values(by="Table5.คะแนน")
     y_col = "Shift" if "Shift" in df_agent.columns else "ชื่อ"
     
-    # คำนวณสีประจำแท่งตามเกณฑ์ประเมินจริง
+    # คำนวณสีของแท่งรายบุคคลจากคะแนนจริง
     df_agent["color_group"] = df_agent["Table5.คะแนน"].apply(get_color_by_score)
     
     fig_bar = go.Figure()
@@ -161,7 +162,7 @@ with col1:
         x=df_agent["Table5.คะแนน"],
         y=df_agent[y_col],
         orientation='h',
-        marker_color=df_agent["color_group"], 
+        marker_color=df_agent["color_group"].tolist(), # บังคับสีตรงตัวรายบุคคล
         text=df_agent["Table5.คะแนน"].round(2),
         textposition="inside",
         textfont=dict(color="white", weight="bold")
@@ -178,9 +179,9 @@ with col1:
     )
     st.plotly_chart(fig_bar, use_container_width=True)
 
-# 👉 คอลัมน์ขวา: 2 กราฟย่อยรายวัน บน-ล่าง (ความสูงรวม 650px)
+# 👉 คอลัมน์ขวา: กราฟแสดงแนวโน้มรายวันแบบแบ่ง 2 ชั้น (บน-ล่าง)
 with col2:
-    if "วันที่ประเมิน" in df_filtered.columns:
+    if "壓ันที่ประเมิน" in df_filtered.columns or "วันที่ประเมิน" in df_filtered.columns:
         df_trend = df_filtered.groupby("วันที่ประเมิน").agg(
             sum_score=("Table5.คะแนน", "sum"),
             count_cases=("Table5.คะแนน", "count")
@@ -196,6 +197,7 @@ with col2:
             subplot_titles=("📈 แนวโน้ม % ประสิทธิภาพรายวัน (% Performance)", "📊 แนวโน้มคะแนนสะสมรวมรายวัน (Sum Score)")
         )
 
+        # ชั้นบน: กราฟเส้น % ประสิทธิภาพ
         fig_split.add_trace(
             go.Scatter(
                 x=df_trend["วันที่_str"],
@@ -211,6 +213,7 @@ with col2:
             row=1, col=1
         )
 
+        # ชั้นล่าง: กราฟแท่งคะแนนดิบรวมรายวัน
         max_y_value = df_trend["sum_score"].max() if not df_trend.empty else 100
         fig_split.add_trace(
             go.Bar(
@@ -242,46 +245,66 @@ with col2:
 st.markdown("<br>", unsafe_allow_html=True)
 
 # =========================================================================
-# 📊 โซนกราฟแถวล่างสุด: กราฟความเสถียร (แก้ไขโครงสร้างใหม่ ไม่เกิด Error)
+# 5. โซนกราฟแถวล่างสุด: วิเคราะห์ความเสถียร (แก้ไขระบบสีเพี้ยนและ customdata เต็มรูปแบบ)
 # =========================================================================
 st.markdown("### 🔍 เจาะลึกความเสถียรของคุณภาพบริการ")
 
 x_col_box = "Shift" if "Shift" in df_filtered.columns else "ชื่อ"
 
-# เตรียมข้อมูลสรุปทางสถิติ
+# คำนวณค่าทางสถิติ Max, Median, Min ของรายบุคคล
 df_box_stat = df_filtered.groupby(x_col_box)["Table5.คะแนน"].agg(
     Max="max",
     Median="median",
     Min="min"
 ).reset_index()
 
+# คำนวณระยะกางของหนวดแกน Y (Error Bars)
 df_box_stat["error_plus"] = df_box_stat["Max"] - df_box_stat["Median"]
 df_box_stat["error_minus"] = df_box_stat["Median"] - df_box_stat["Min"]
 
-# กำหนดสีในคอลัมน์ดิบเพื่อนำไปแมปสี
-df_box_stat["color_hex"] = df_box_stat["Median"].apply(get_color_by_score)
+# กำหนดสีที่ถูกต้องตามเกณฑ์ประเมินของค่า Median จริงรายบุคคล
+df_box_stat["color_group"] = df_box_stat["Median"].apply(get_color_by_score)
 
-# ใช้ px.bar ทำงานร่วมกับ error_y เพื่อความเสถียรสูงสุด
-fig_custom_box = px.bar(
-    df_box_stat, 
-    x=x_col_box, 
-    y="Median",
-    error_y="error_plus",
-    error_y_minus="error_minus",
-    color="color_hex",
-    color_discrete_map={val: val for val in df_box_stat["color_hex"].unique()},
-    title="วิเคราะห์ความเสถียรของคุณภาพบริการรายบุคคล (สีตามเกณฑ์ประเมิน | เส้นหนวดยิ่งแคบ = คุณภาพบริการยิ่งคงเส้นคงวา)"
-)
+# สร้างกราฟความเสถียรด้วย go.Figure (บังคับสีแมปตรงตัว 100%)
+fig_custom_box = go.Figure()
+
+fig_custom_box.add_trace(go.Bar(
+    x=df_box_stat[x_col_box],
+    y=df_box_stat["Median"],
+    error_y=dict(
+        type='data', 
+        array=df_box_stat["error_plus"].tolist(), 
+        visible=True, 
+        thickness=1.5, 
+        color="#475569"
+    ),
+    error_y_minus=dict(
+        type='data', 
+        array=df_box_stat["error_minus"].tolist(), 
+        visible=True, 
+        thickness=1.5, 
+        color="#475569"
+    ),
+    marker_color=df_box_stat["color_group"].tolist(), # พ่นสีตรงตัวจากอาร์เรย์รายบุคคล ไม่พึ่งพา Palette อัตโนมัติ
+    customdata=[[row['Max'], row['Min']] for _, row in df_box_stat.iterrows()],
+    hovertemplate="<b>%{x}</b><br>" +
+                  "คะแนนสูงสุด (Max): %{customdata[0]} คะแนน<br>" +
+                  "คะแนนตรงกลาง (Median): %{y} คะแนน<br>" +
+                  "คะแนนต่ำสุด (Min): %{customdata[1]} คะแนน<extra></extra>"
+))
 
 fig_custom_box.update_layout(
-    showlegend=False, 
+    title="วิเคราะห์ความเสถียรของคุณภาพบริการรายบุคคล (สีตามเกณฑ์ประเมินจริง | เส้นหนวดยิ่งแคบ = คุณภาพบริการยิ่งคงเส้นคงวา)",
+    hovermode="closest",
+    xaxis_title=x_col_box,
     yaxis_title="คะแนนเสถียรภาพ (Median)",
-    height=450
+    height=480,
+    xaxis=dict(type='category')
 )
 st.plotly_chart(fig_custom_box, use_container_width=True)
 
 # =========================================================================
-# 🧮 ส่วนที่ 5: ตารางสรุปข้อมูลประเมินผลไขว้รายวัน
+# 6. ส่วนตารางสรุปข้อมูลประเมินผลไขว้รายวัน (PIVOT TABLE)
 # =========================================================================
 st.markdown("---")
 st.markdown("### 🗂️ ตารางสรุปข้อมูลประเมินผลไขว้รายวัน")
@@ -293,10 +316,10 @@ if "วันที่ประเมิน" in df_filtered.columns and not df_f
     work_days_per_agent = df_pivot_prep.groupby(idx_col)["วันที่ประเมิน"].nunique()
     
     agent_grade_map = df_pivot_prep.groupby(idx_col)["Performance by personal"].last().to_dict()
-    df_pivot_prep["วันที่_str"] = df_pivot_prep["วันที่ประเมิน"].dt.strftime('%d/%m/%Y')
+    df_pivot_prep["壓ันที่_str"] = df_pivot_prep["วันที่ประเมิน"].dt.strftime('%d/%m/%Y')
     
     pivot_table = df_pivot_prep.pivot_table(
-        index=idx_col, columns="วันที่_str", values="Table5.คะแนน", aggfunc="sum", fill_value=0
+        index=idx_col, columns="壓ันที่_str", values="Table5.คะแนน", aggfunc="sum", fill_value=0
     )
     
     date_columns = list(pivot_table.columns)
