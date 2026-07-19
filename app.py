@@ -55,8 +55,12 @@ df_filtered = df_filtered[(df_filtered["Table5.คะแนน"] >= score_range[
 # คำนวณค่าสถิติตามตัวกรอง
 total_records = len(df_filtered)
 if total_records > 0:
+    # คำนวณคะแนนรวมดิบสะสมทั้งหมด เทียบกับ คะแนนดิบเต็มสูงสุดที่พนักงานควรจะทำได้
+    sum_actual_score = df_filtered["Table5.คะแนน"].sum()
+    sum_possible_score = total_records * FULL_SCORE
+    
     avg_score = df_filtered["Table5.คะแนน"].mean()
-    avg_percentage = (avg_score / FULL_SCORE) * 100
+    avg_percentage = (sum_actual_score / sum_possible_score) * 100
     above_target_cases = len(df_filtered[df_filtered["Table5.คะแนน"] >= TARGET_SCORE])
     above_target_pct = (above_target_cases / total_records) * 100
 else:
@@ -87,9 +91,10 @@ kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 with kpi1:
     st.metric("คะแนนเต็มต่อเคส", f"{FULL_SCORE} คะแนน")
 with kpi2:
-    st.metric("คะแนนเฉลี่ยปัจจุบันที่ทำได้", f"{avg_score:.2f} / {FULL_SCORE}", delta=f"คิดเป็น {avg_percentage:.1f}% ของเต็ม")
+    # ปรับเป็นคะแนนรวมดิบที่ทำได้จากคะแนนเต็มทั้งหมดตามที่ขอครับ
+    st.metric("คะแนนสะสมที่ทำได้จริงทั้งหมด", f"{int(sum_actual_score):,} / {int(sum_possible_score):,}", delta=f"คิดเป็น {avg_percentage:.1f}% ของคะแนนเต็ม")
 with kpi3:
-    st.metric(f"คะแนนเป้าหมาย ({TARGET_PERCENTAGE}%)", f"{TARGET_SCORE:.2f} คะแนน", delta=f"ขาดอีก {(TARGET_SCORE - avg_score):.2f}" if avg_score < TARGET_SCORE else "บรรลุเป้าหมายแล้ว ✨")
+    st.metric(f"คะแนนเป้าหมายเฉลี่ย ({TARGET_PERCENTAGE}%)", f"{TARGET_SCORE:.2f} คะแนน", delta=f"ค่าเฉลี่ยขาดอีก {(TARGET_SCORE - avg_score):.2f}" if avg_score < TARGET_SCORE else "ค่าเฉลี่ยบรรลุเป้าหมายแล้ว ✨")
 with kpi4:
     st.metric("สัดส่วนเคสที่ผ่านเกณฑ์ 90%", f"{above_target_cases} เคส", delta=f"{above_target_pct:.1f}% ของเคสทั้งหมด")
 
@@ -98,6 +103,9 @@ st.markdown("<br>", unsafe_allow_html=True)
 # 📈 โซนกราฟแถวที่ 1: การจัดอันดับและแนวโน้ม
 st.markdown("### 📈 อันดับผลงานและแนวโน้มคุณภาพ")
 col1, col2 = st.columns(2)
+
+# คำนวณคะแนนเฉลี่ยรวมของระบบไว้เพื่อเทียบใน Matrix
+system_average = df_filtered["Table5.คะแนน"].mean()
 
 with col1:
     df_agent = df_filtered.groupby("ชื่อ")["Table5.คะแนน"].mean().reset_index().sort_values(by="Table5.คะแนน")
@@ -116,29 +124,65 @@ with col2:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 📊 โซนกราฟแถวที่ 2: กราฟแบ่งกลุ่ม และ กราฟความเสถียร
+# 📊 โซนกราฟแถวที่ 2: แทนที่กราฟรูปที่สองด้วย 4 Matrix ตรวจคนต่ำกว่าค่าเฉลี่ยตามบรีฟ
 st.markdown("### 🔍 เจาะลึกการแบ่งกลุ่มพนักงานและความเสถียรของคุณภาพ")
 col3, col4 = st.columns(2)
 
 with col3:
-    fig_stack = px.bar(
-        df_filtered, y="ชื่อ", color="Performance by personal",
-        title="สัดส่วนเกรดประเมินที่ได้รับแบ่งกลุ่มรายบุคคล",
-        labels={"Performance by personal": "เกรดผลงาน"},
-        category_orders={"Performance by personal": ["Excellent", "Good", "Fair", "Need Improve"]},
-        color_discrete_map={"Excellent": "#22c55e", "Good": "#3b82f6", "Fair": "#eab308", "Need Improve": "#ef4444"}
-    )
-    st.plotly_chart(fig_stack, use_container_width=True)
+    st.markdown(f"##### 🗂️ 4 Matrix จำแนกเกรดพนักงาน (เทียบกับค่าเฉลี่ยระบบ: **{system_average:.2f}** คะแนน)")
+    
+    # ดึงรายชื่อพนักงานและคำนวณคะแนนเฉลี่ยของแต่ละคนเพื่อเช็กว่าต่ำกว่าค่าเฉลี่ยหรือไม่
+    agent_means = df_filtered.groupby("ชื่อ")["Table5.คะแนน"].mean().to_dict()
+    
+    # จัดกลุ่มรายชื่อพนักงานตามเกรดล่าสุดที่อยู่ในระบบ
+    matrix_data = {"Excellent": [], "Good": [], "Fair": [], "Need Improve": []}
+    
+    for agent, score in agent_means.items():
+        # ค้นหาเกรดของพนักงานคนนี้จากข้อมูลล่าสุด
+        agent_grade = df_filtered[df_filtered["ชื่อ"] == agent]["Performance by personal"].iloc[0]
+        
+        # เพิ่มสถานะตรวจจับคนต่ำกว่าค่าเฉลี่ยรวม
+        if score < system_average:
+            status_text = f"❌ {agent} ({score:.1f} คะแนน) — 🚨 ต่ำกว่าค่าเฉลี่ย"
+        else:
+            status_text = f"🟢 {agent} ({score:.1f} คะแนน) — ✨ สูงกว่าค่าเฉลี่ย"
+            
+        if agent_grade in matrix_data:
+            matrix_data[agent_grade].append(status_text)
+            
+    # แสดงผลเป็น 4 Matrix ยุบขยายได้แยกตามเฉดสี
+    with st.expander("🟢 เกรด Excellent (ดีเยี่ยม)", expanded=True):
+        if matrix_data["Excellent"]:
+            for name in matrix_data["Excellent"]: st.write(name)
+        else:
+            st.write("_ไม่มีข้อมูลพนักงานในเกรดนี้_")
+            
+    with st.expander("🔵 เกรด Good (ดีตามมาตรฐาน)", expanded=True):
+        if matrix_data["Good"]:
+            for name in matrix_data["Good"]: st.write(name)
+        else:
+            st.write("_ไม่มีข้อมูลพนักงานในเกรดนี้_")
+            
+    with st.expander("🟡 เกรด Fair (พอใช้ - ควรผลักดัน)", expanded=True):
+        if matrix_data["Fair"]:
+            for name in matrix_data["Fair"]: st.write(name)
+        else:
+            st.write("_ไม่มีข้อมูลพนักงานในเกรดนี้_")
+            
+    with st.expander("🔴 เกรด Need Improve (ต้องปรับปรุงด่วน)", expanded=True):
+        if matrix_data["Need Improve"]:
+            for name in matrix_data["Need Improve"]: st.write(name)
+        else:
+            st.write("_ไม่มีข้อมูลพนักงานในเกรดนี้_")
 
 with col4:
-    # 🛠️ แปลงกลไกเป็น Custom Stat Bar: คำนวณหา Max, Median, Min ของจริงเอง เพื่อควบคุมเนื้อหา Hover ได้ 100%
+    # โค้ดสำหรับกราฟความเสถียร (คะแนนแกว่ง Max/Median/Min)
     df_box_stat = df_filtered.groupby("ชื่อ")["Table5.คะแนน"].agg(
         Max="max",
         Median="median",
         Min="min"
     ).reset_index()
     
-    # คำนวณระยะแกว่งเพื่อใช้ทำเป็นเส้นหนวดบน-ล่าง
     df_box_stat["error_plus"] = df_box_stat["Max"] - df_box_stat["Median"]
     df_box_stat["error_minus"] = df_box_stat["Median"] - df_box_stat["Min"]
 
@@ -149,7 +193,6 @@ with col4:
         color="ชื่อ"
     )
 
-    # สั่งให้เมาส์ชี้แล้วโชว์ข้อความที่กระชับและลบคำซ้ำซ้อนออกทั้งหมดอย่างแท้จริง
     fig_custom_box.update_traces(
         hovertemplate="<b>%{x}</b><br>" +
                       "คะแนนสูงสุด (Max): %{customdata[0]} คะแนน<br>" +
@@ -158,7 +201,6 @@ with col4:
         customdata=df_box_stat[["Max", "Min"]].values
     )
     
-    # เปิด hovermode ให้กลับมาทำงานเฉพาะตัวกล่องข้อมูลดีไซน์ใหม่
     fig_custom_box.update_layout(
         hovermode="closest",
         yaxis_title="คะแนนเสถียรภาพ (Median)"
