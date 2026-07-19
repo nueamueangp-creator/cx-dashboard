@@ -6,7 +6,7 @@ import plotly.express as px
 st.set_page_config(page_title="1577 CX Department Dashboard", layout="wide", initial_sidebar_state="collapsed")
 
 # 🔗 ⚠️ สำคัญมาก: ก๊อปปี้ลิงก์ .csv ที่ได้จากข้อ 3 ในส่วนแรกมาวางแทนที่เครื่องหมายคำพูดด้านล่างนี้เลยครับ
-sheet_csv_url = "วhttps://docs.google.com/spreadsheets/d/e/2PACX-1vRSLXaX4OFmcO8xhcoKllNThw3tFBbVCRETb5X9n6Q4gTc4Rudd9d5_wS7UZXKHm8BVVtzzq1sWgxAN/pubhtml"
+sheet_csv_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRSLXaX4OFmcO8xhcoKllNThw3tFBbVCRETb5X9n6Q4gTc4Rudd9d5_wS7UZXKHm8BVVtzzq1sWgxAN/pub?output=csv"
 
 try:
     # 2. ดึงข้อมูลสดจาก Google Sheets
