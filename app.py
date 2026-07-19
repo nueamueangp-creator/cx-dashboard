@@ -131,17 +131,19 @@ with col3:
     st.plotly_chart(fig_stack, use_container_width=True)
 
 with col4:
-    # 🛠️ จัดการจุดนี้เด็ดขาด: สั่งปิดการคำนวณอัตโนมัติของตัวเก่าทั้งหมด
+    # 🛠️ ปรับกลไกตรงนี้ใหม่ทั้งหมดเพื่อบล็อกข้อมูลอัตโนมัติของสถิติ Box Plot
     fig_box = px.box(
         df_filtered, x="ชื่อ", y="Table5.คะแนน", 
         title="วิเคราะห์ความเสถียรของคุณภาพบริการ (ความกว้างกล่อง = คะแนนแกว่ง)", color="ชื่อ"
     )
-    # บังคับใช้เทมเพลตคำอธิบายเฉพาะตัว และสั่งปิดโหมดกล่องของแถม (hovermode=False)
-    fig_box.update_traces(
-        hovertemplate="<b>%{x}</b><br>คะแนนสูงสุด (Max): %{y}<br>คะแนนตรงกลาง (Median): %{median}<br>คะแนนต่ำสุด (Min): %{min}<extra></extra>"
-    )
+    # บังคับลบหน้าต่าง Hover ที่ระบบสร้างใหม่อัตโนมัติออกทั้งหมด
     fig_box.update_layout(
-        hovermode="closest"  # บังคับแสดงทีละกล่องตามเมาส์ชี้ ไม่ต้องดึงสถิติรวมของแกน X โผล่มา
+        hovermode=False
+    )
+    # ปรับแต่งการตอบสนองเฉพาะจุดให้เป็นค่าว่าง (Clean กล่องข้อความแบบถาวร)
+    fig_box.update_traces(
+        hoverinfo="none",
+        hovertemplate=None
     )
     st.plotly_chart(fig_box, use_container_width=True)
 
