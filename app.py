@@ -30,27 +30,49 @@ except Exception as e:
 st.sidebar.header("🔍 ตัวกรองแดชบอร์ด")
 st.sidebar.markdown("---")
 
-# 👤 ตัวกรองรายชื่อพนักงาน
-agent_filter_type = st.sidebar.radio("รูปแบบการเลือกพนักงาน:", ["แสดงพนักงานทุกคน (All)", "เลือกเฉพาะบางคน"])
-all_agents = sorted(df["ชื่อ"].dropna().unique())
-
-if agent_filter_type == "เลือกเฉพาะบางคน":
-    selected_agents = st.sidebar.multiselect("เลือกชื่อพนักงาน:", all_agents, default=all_agents[:2])
-    df_filtered = df[df["ชื่อ"].isin(selected_agents)]
+# 📅 [เพิ่มใหม่] ตัวกรองช่วงวันที่ประเมิน
+if "วันที่ประเมิน" in df.columns:
+    min_date = df["วันที่ประเมิน"].min().date()
+    max_date = df["วันที่ประเมิน"].max().date()
+    
+    st.sidebar.subheader("📅 เลือกช่วงวันที่ประเมิน")
+    selected_date_range = st.sidebar.date_input(
+        "ช่วงเวลาที่ต้องการดู:",
+        value=(min_date, max_date),
+        min_value=min_date,
+        max_value=max_date
+    )
+    
+    # ทำการกรองตามวันที่ (รองรับกรณีผู้ใช้กำลังเลือกวันที่เริ่มต้นแต่ยังไม่ได้เลือกวันที่สิ้นสุด)
+    if isinstance(selected_date_range, tuple) and len(selected_date_range) == 2:
+        start_date, end_date = selected_date_range
+        df_filtered = df[(df["วันที่ประเมิน"].dt.date >= start_date) & (df["วันที่ประเมิน"].dt.date <= end_date)]
+    else:
+        df_filtered = df.copy()
 else:
     df_filtered = df.copy()
 
+# 👤 ตัวกรองรายชื่อพนักงาน
+agent_filter_type = st.sidebar.radio("รูปแบบการเลือกพนักงาน:", ["แสดงพนักงานทุกคน (All)", "เลือกเฉพาะบางคน"])
+all_agents = sorted(df_filtered["ชื่อ"].dropna().unique())
+
+if agent_filter_type == "เลือกเฉพาะบางคน":
+    selected_agents = st.sidebar.multiselect("เลือกชื่อพนักงาน:", all_agents, default=all_agents[:2] if len(all_agents) > 1 else all_agents)
+    df_filtered = df_filtered[df_filtered["ชื่อ"].isin(selected_agents)]
+
 # 🏅 ตัวกรองเกรดผลงาน
-all_grades = sorted(df["Performance by personal"].dropna().unique())
+all_grades = sorted(df_filtered["Performance by personal"].dropna().unique())
 selected_grade = st.sidebar.selectbox("🏅 เลือกเกรดประเมิน:", ["ทั้งหมด (All)"] + all_grades)
 
 if selected_grade != "ทั้งหมด (All)":
     df_filtered = df_filtered[df_filtered["Performance by personal"] == selected_grade]
 
 # 📊 ตัวกรองช่วงคะแนน
-min_score, max_score = int(df["Table5.คะแนน"].min()), int(df["Table5.คะแนน"].max())
-score_range = st.sidebar.slider("📊 ช่วงคะแนนที่ต้องการดู:", min_score, max_score, (min_score, max_score))
-df_filtered = df_filtered[(df_filtered["Table5.คะแนน"] >= score_range[0]) & (df_filtered["Table5.คะแนน"] <= score_range[1])]
+if not df_filtered.empty:
+    min_score, max_score = int(df_filtered["Table5.คะแนน"].min()), int(df_filtered["Table5.คะแนน"].max())
+    if min_score != max_score:
+        score_range = st.sidebar.slider("📊 ช่วงคะแนนที่ต้องการดู:", min_score, max_score, (min_score, max_score))
+        df_filtered = df_filtered[(df_filtered["Table5.คะแนน"] >= score_range[0]) & (df_filtered["Table5.คะแนน"] <= score_range[1])]
 
 # คำนวณค่าสถิติตามตัวกรอง
 total_records = len(df_filtered)
@@ -129,46 +151,42 @@ with col2:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 📊 โซนกราฟแถวที่ 2: แสดงกราฟความเสถียรคู่กับพื้นที่ว่างเพื่อความโปร่งสบายตา
+# 📊 โซนกราฟแถวที่ 2: ปรับกราฟความเสถียรขยายเต็มความกว้างหน้าจอ ไม่เว้นพื้นที่ว่างแล้ว
 st.markdown("### 🔍 เจาะลึกความเสถียรของคุณภาพบริการ")
-col3, col4 = st.columns(2)
 
-with col3:
-    st.info("💡 เคล็ดลับการดูฝั่งขวา: ความกว้างของเส้นหนวดดำ ยิ่งยาวยิ่งแปลว่าพนักงานคนนั้นอารมณ์หรือคุณภาพงานแกว่งสูงในแต่ละเคส ซึ่งส่งผลต่อคะแนนความคงเส้นคงวาในการบริการลูกค้า")
+df_box_stat = df_filtered.groupby("ชื่อ")["Table5.คะแนน"].agg(
+    Max="max",
+    Median="median",
+    Min="min"
+).reset_index()
 
-with col4:
-    df_box_stat = df_filtered.groupby("ชื่อ")["Table5.คะแนน"].agg(
-        Max="max",
-        Median="median",
-        Min="min"
-    ).reset_index()
-    
-    df_box_stat["error_plus"] = df_box_stat["Max"] - df_box_stat["Median"]
-    df_box_stat["error_minus"] = df_box_stat["Median"] - df_box_stat["Min"]
+df_box_stat["error_plus"] = df_box_stat["Max"] - df_box_stat["Median"]
+df_box_stat["error_minus"] = df_box_stat["Median"] - df_box_stat["Min"]
 
-    fig_custom_box = px.bar(
-        df_box_stat, x="ชื่อ", y="Median",
-        error_y="error_plus", error_y_minus="error_minus",
-        title="วิเคราะห์ความเสถียรของคุณภาพบริการ (ความยาวเส้นหนวด = คะแนนแกว่ง)",
-        color="ชื่อ"
-    )
+fig_custom_box = px.bar(
+    df_box_stat, x="ชื่อ", y="Median",
+    error_y="error_plus", error_y_minus="error_minus",
+    title="วิเคราะห์ความเสถียรของคุณภาพบริการรายบุคคล (เส้นหนวดยิ่งแคบ = คุณภาพบริการยิ่งเสถียรคงเส้นคงวา)",
+    color="ชื่อ"
+)
 
-    fig_custom_box.update_traces(
-        hovertemplate="<b>%{x}</b><br>" +
-                      "คะแนนสูงสุด (Max): %{customdata[0]} คะแนน<br>" +
-                      "คะแนนตรงกลาง (Median): %{y} คะแนน<br>" +
-                      "คะแนนต่ำสุด (Min): %{customdata[1]} คะแนน<extra></extra>",
-        customdata=df_box_stat[["Max", "Min"]].values
-    )
-    
-    fig_custom_box.update_layout(
-        hovermode="closest",
-        yaxis_title="คะแนนเสถียรภาพ (Median)"
-    )
-    st.plotly_chart(fig_custom_box, use_container_width=True)
+fig_custom_box.update_traces(
+    hovertemplate="<b>%{x}</b><br>" +
+                  "คะแนนสูงสุด (Max): %{customdata[0]} คะแนน<br>" +
+                  "คะแนนตรงกลาง (Median): %{y} คะแนน<br>" +
+                  "คะแนนต่ำสุด (Min): %{customdata[1]} คะแนน<extra></extra>",
+    customdata=df_box_stat[["Max", "Min"]].values
+)
+
+fig_custom_box.update_layout(
+    hovermode="closest",
+    yaxis_title="คะแนนเสถียรภาพ (Median)",
+    height=450  # ปรับความสูงกราฟให้เหมาะสมเต็มหน้าจอ
+)
+st.plotly_chart(fig_custom_box, use_container_width=True)
 
 # =========================================================================
-# 🧮 ส่วนที่ 4: ตารางสรุปข้อมูลประเมินผลไขว้รายวัน (+ เพิ่มกลุ่มเกรดผลงาน)
+# 🧮 ส่วนที่ 4: ตารางสรุปข้อมูลประเมินผลไขว้รายวัน (แบบไม่มีแถว Total ในตาราง)
 # =========================================================================
 st.markdown("---")
 st.markdown("### 🗂️ ตารางสรุปข้อมูลประเมินผลไขว้รายวัน")
@@ -177,11 +195,10 @@ if "วันที่ประเมิน" in df_filtered.columns and not df_f
     df_pivot_prep = df_filtered.copy()
     work_days_per_agent = df_pivot_prep.groupby("ชื่อ")["วันที่ประเมิน"].nunique()
     
-    # ดึงค่ากลุ่มเกรดล่าสุดของพนักงานแต่ละคนมาจับคู่
     agent_grade_map = df_pivot_prep.groupby("ชื่อ")["Performance by personal"].last().to_dict()
-    
     df_pivot_prep["วันที่ประเมิน"] = df_pivot_prep["วันที่ประเมิน"].dt.strftime('%d/%m/%Y')
     
+    # สร้าง Pivot Table
     pivot_table = df_pivot_prep.pivot_table(
         index="ชื่อ", columns="วันที่ประเมิน", values="Table5.คะแนน", aggfunc="sum", fill_value=0
     )
@@ -189,8 +206,7 @@ if "วันที่ประเมิน" in df_filtered.columns and not df_f
     # 1. แทรกคอลัมน์กลุ่มเกรดผลงานไว้หน้าสุด
     pivot_table.insert(0, "กลุ่มผลงานปัจจุบัน", pivot_table.index.map(agent_grade_map))
     
-    # 2. คำนวณผลรวมคะแนน
-    # เลือกเฉพาะคอลัมน์วันที่ (ที่เป็นตัวเลขคะแนน) มา Sum ป้องกันการดึงคอลัมน์เกรดที่เป็น Text มารวม
+    # 2. คำนวณผลรวมคะแนนดิบรายคน
     date_columns = [col for col in pivot_table.columns if col != "กลุ่มผลงานปัจจุบัน"]
     pivot_table["Grand Total"] = pivot_table[date_columns].sum(axis=1)
     
@@ -205,18 +221,14 @@ if "วันที่ประเมิน" in df_filtered.columns and not df_f
         
     pivot_table["% Achievement (เทียบเต็ม)"] = percentage_list
     
-    # 4. สร้างแถวรวม (Grand Total ของตารางด้านล่างสุด)
-    total_row_data = {"กลุ่มผลงานปัจจุบัน": "-"}
-    for col in date_columns:
-        total_row_data[col] = pivot_table[col].sum()
-    total_row_data["Grand Total"] = pivot_table["Grand Total"].sum()
-    
+    # 💥 [ปรับตามคำสั่ง] 1. แสดงผลรวมสะสมภาพรวมทั้งหมดเด่นๆ บนหัวตารางแทนการเอาใส่ในเนื้อตาราง
+    total_score_sum = pivot_table["Grand Total"].sum()
     total_possible_all = len(df_filtered) * FULL_SCORE
-    total_pct_all = (total_row_data["Grand Total"] / total_possible_all) * 100
-    total_row_data["% Achievement (เทียบเต็ม)"] = f"{total_pct_all:.1f}%"
+    total_pct_all = (total_score_sum / total_possible_all) * 100
     
-    pivot_table.loc["Grand Total"] = total_row_data
+    st.success(f"📊 **ภาพรวมของพนักงานทั้งหมดที่ถูกเลือก:** คะแนนสะสมรวมกันทำได้จริง **{int(total_score_sum):,} / {int(total_possible_all):,} คะแนน** (คิดเป็นเฉลี่ยรวม **{total_pct_all:.1f}%** จากคะแนนเต็มทั้งหมด)")
     
+    # 💥 [ปรับตามคำสั่ง] 2. ส่งตารางขึ้นสตรีมลิตโดยไม่มีแถว Grand Total มาคั่นข้อมูลให้สับสนอีกต่อไป
     st.dataframe(pivot_table, use_container_width=True)
 else:
     st.info("💡 ไม่มีข้อมูลแสดงผลในตารางเนื่องจากตัวกรอง")
